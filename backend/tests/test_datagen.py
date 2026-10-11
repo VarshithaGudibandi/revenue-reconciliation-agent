@@ -53,6 +53,16 @@ def assert_consistent(dataset: Dataset) -> None:
             assert payments[anomaly.payment_ids[0]].reference not in invoices
         else:
             assert anomaly.variance_minor == invoice_total - paid_total
+        if anomaly.kind is AnomalyKind.AMBIGUOUS_PAYMENT:
+            candidates = [invoices[iid] for iid in anomaly.invoice_ids]
+            payment = payments[anomaly.payment_ids[0]]
+            assert len(candidates) in (2, 3)
+            assert anomaly.intended_invoice_id in anomaly.invoice_ids
+            assert len({(c.customer_id, c.currency, c.total_minor) for c in candidates}) == 1
+            assert payment.customer_id == candidates[0].customer_id
+            assert payment.amount_minor == candidates[0].total_minor
+            assert payment.reference not in invoices
+            assert all(0 <= (payment.received_on - c.issue_date).days <= 30 for c in candidates)
 
     assert set(seen_invoices) == set(invoices)
     assert set(seen_payments) == set(payments)
@@ -120,7 +130,15 @@ def test_corrections_fix_only_fixable_kinds_and_keep_the_rest() -> None:
 
     assert resolved
     assert all(by_id[anomaly_id].kind in FIXABLE_KINDS for anomaly_id in resolved)
-    assert {a.anomaly_id for a in second.truth.anomalies} == set(by_id) - resolved
+    remaining = {a.anomaly_id for a in second.truth.anomalies}
+    assert set(by_id) - resolved <= remaining
+    created = [a for a in second.truth.anomalies if a.anomaly_id not in by_id]
+    assert all(a.kind is AnomalyKind.MISSING_PAYMENT for a in created)
+    assert len(created) == sum(
+        len(by_id[i].invoice_ids) - 1
+        for i in resolved
+        if by_id[i].kind is AnomalyKind.AMBIGUOUS_PAYMENT
+    )
     assert second.revision == 2
     assert second.invoices == first.invoices
 
@@ -190,3 +208,34 @@ def test_rejects_an_invalid_period(period: str) -> None:
 def test_rejects_rates_that_exceed_the_invoice_count() -> None:
     with pytest.raises(ValueError, match="exceed"):
         generate_dataset(Config(invoices=10, missing_rate=0.9, amount_mismatch_rate=0.9))
+
+
+def test_a_fixed_ambiguous_payment_leaves_its_look_alikes_unpaid() -> None:
+    first = generate_dataset(Config(seed=6, invoices=400, ambiguous_rate=0.05))
+    second = apply_corrections(first, seed=6, fix_fraction=1.0)
+
+    ambiguous = [a for a in first.truth.anomalies if a.kind is AnomalyKind.AMBIGUOUS_PAYMENT]
+    missing_after = {
+        a.invoice_ids[0] for a in second.truth.anomalies if a.kind is AnomalyKind.MISSING_PAYMENT
+    }
+    matched_after = {m.invoice_id: m.payment_ids for m in second.truth.matches}
+
+    assert ambiguous
+    for anomaly in ambiguous:
+        assert anomaly.intended_invoice_id is not None
+        assert matched_after[anomaly.intended_invoice_id] == anomaly.payment_ids
+        decoys = set(anomaly.invoice_ids) - {anomaly.intended_invoice_id}
+        assert decoys <= missing_after
+
+
+def test_ambiguous_groups_do_not_share_invoices() -> None:
+    dataset = generate_dataset(Config(seed=8, invoices=400, ambiguous_rate=0.05))
+
+    grouped = [
+        invoice_id
+        for a in dataset.truth.anomalies
+        if a.kind is AnomalyKind.AMBIGUOUS_PAYMENT
+        for invoice_id in a.invoice_ids
+    ]
+
+    assert len(grouped) == len(set(grouped))

@@ -11,6 +11,7 @@ class AnomalyKind(StrEnum):
     PARTIAL_PAYMENT = "partial_payment"
     MISREFERENCED_PAYMENT = "misreferenced_payment"
     CURRENCY_MISMATCH = "currency_mismatch"
+    AMBIGUOUS_PAYMENT = "ambiguous_payment"
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,10 @@ class Anomaly:
     ``variance_minor`` is measured against the true counterpart: positive when the
     invoice is underpaid, negative when overpaid, ``None`` when it cannot be
     computed without an exchange rate.
+
+    For ``AMBIGUOUS_PAYMENT`` the invoices are every unpaid invoice the payment could
+    belong to, ``intended_invoice_id`` is the one it really belongs to, and the variance
+    is what stays unpaid however the payment is assigned.
     """
 
     anomaly_id: str
@@ -56,6 +61,7 @@ class Anomaly:
     payment_ids: tuple[str, ...]
     variance_minor: int | None
     currency: str
+    intended_invoice_id: str | None = None
 
 
 @dataclass(frozen=True)

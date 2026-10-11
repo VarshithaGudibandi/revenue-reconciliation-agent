@@ -21,6 +21,7 @@ FIXABLE_KINDS = frozenset(
         AnomalyKind.DUPLICATE_PAYMENT,
         AnomalyKind.PARTIAL_PAYMENT,
         AnomalyKind.MISREFERENCED_PAYMENT,
+        AnomalyKind.AMBIGUOUS_PAYMENT,
     }
 )
 
@@ -42,10 +43,11 @@ class Config:
     partial_rate: float = 0.03
     misreferenced_rate: float = 0.02
     currency_mismatch_rate: float = 0.01
+    ambiguous_rate: float = 0.02
     unmatched_payment_rate: float = 0.03
 
     def anomaly_counts(self) -> dict[AnomalyKind, int]:
-        """How many invoices get each anomaly, plus how many orphan payments to add."""
+        """How many invoices get each anomaly, how many ambiguous groups, and how many orphans."""
         rates = {
             AnomalyKind.MISSING_PAYMENT: self.missing_rate,
             AnomalyKind.AMOUNT_MISMATCH: self.amount_mismatch_rate,
@@ -53,6 +55,7 @@ class Config:
             AnomalyKind.PARTIAL_PAYMENT: self.partial_rate,
             AnomalyKind.MISREFERENCED_PAYMENT: self.misreferenced_rate,
             AnomalyKind.CURRENCY_MISMATCH: self.currency_mismatch_rate,
+            AnomalyKind.AMBIGUOUS_PAYMENT: self.ambiguous_rate,
             AnomalyKind.UNMATCHED_PAYMENT: self.unmatched_payment_rate,
         }
         return {kind: round(rate * self.invoices) for kind, rate in rates.items()}
@@ -65,10 +68,11 @@ class Config:
         if self.invoices < 1 or self.customers < 1:
             raise ValueError("invoices and customers must be at least 1")
         counts = self.anomaly_counts()
-        affected = sum(
-            count for kind, count in counts.items() if kind is not AnomalyKind.UNMATCHED_PAYMENT
-        )
-        if affected + self.split_count() > self.invoices:
+        single = {AnomalyKind.UNMATCHED_PAYMENT, AnomalyKind.AMBIGUOUS_PAYMENT}
+        affected = sum(count for kind, count in counts.items() if kind not in single)
+        # An ambiguous group has two or three invoices; plan for the larger size.
+        worst_case_grouped = 3 * counts[AnomalyKind.AMBIGUOUS_PAYMENT]
+        if affected + self.split_count() + worst_case_grouped > self.invoices:
             raise ValueError("anomaly and split rates exceed the number of invoices")
 
 
@@ -116,7 +120,19 @@ def generate_dataset(config: Config) -> Dataset:
             )
         )
 
-    plan = _plan_invoices(config, rng)
+    plan, groups = _plan_invoices(config, rng)
+    for group in groups:
+        # Invoices in a group look alike: same customer, currency and amount, issued days apart.
+        base = invoices[group[0]]
+        first_day = rng.randint(1, days_in_month - 5)
+        for index in group:
+            invoices[index] = replace(
+                invoices[index],
+                customer_id=base.customer_id,
+                currency=base.currency,
+                total_minor=base.total_minor,
+                issue_date=date(year, month, first_day + rng.randint(0, 5)),
+            )
 
     payment_numbers = itertools.count(1)
     wrong_reference_numbers = itertools.count(900_001)
@@ -124,12 +140,19 @@ def generate_dataset(config: Config) -> Dataset:
     matches: list[Match] = []
     anomalies: list[Anomaly] = []
 
-    def pay(reference: str, invoice: Invoice, amount: int, *, currency: str | None = None) -> str:
+    def pay(
+        reference: str,
+        invoice: Invoice,
+        amount: int,
+        *,
+        currency: str | None = None,
+        received_on: date | None = None,
+    ) -> str:
         payment = Payment(
             payment_id=f"PAY-{next(payment_numbers):06d}",
             reference=reference,
             customer_id=invoice.customer_id,
-            received_on=invoice.issue_date + timedelta(days=rng.randint(1, 30)),
+            received_on=received_on or invoice.issue_date + timedelta(days=rng.randint(1, 30)),
             currency=currency or invoice.currency,
             amount_minor=amount,
         )
@@ -142,6 +165,7 @@ def generate_dataset(config: Config) -> Dataset:
         payment_ids: tuple[str, ...],
         variance: int | None,
         currency: str,
+        intended: str | None = None,
     ) -> None:
         anomalies.append(
             Anomaly(
@@ -151,6 +175,7 @@ def generate_dataset(config: Config) -> Dataset:
                 payment_ids=payment_ids,
                 variance_minor=variance,
                 currency=currency,
+                intended_invoice_id=intended,
             )
         )
 
@@ -182,11 +207,32 @@ def generate_dataset(config: Config) -> Dataset:
         elif outcome is AnomalyKind.MISREFERENCED_PAYMENT:
             wrong = f"INV-{next(wrong_reference_numbers):06d}"
             flag(outcome, (ref,), (pay(wrong, invoice, total),), 0, invoice.currency)
+        elif outcome is AnomalyKind.AMBIGUOUS_PAYMENT:
+            continue  # handled per group below
         elif outcome is AnomalyKind.CURRENCY_MISMATCH:
             other = "EUR" if invoice.currency == "USD" else "USD"
             flag(
                 outcome, (ref,), (pay(ref, invoice, total, currency=other),), None, invoice.currency
             )
+
+    for group in groups:
+        members = [invoices[index] for index in group]
+        intended = rng.choice(members)
+        latest = max(member.issue_date for member in members)
+        payment_id = pay(
+            f"INV-{next(wrong_reference_numbers):06d}",
+            intended,
+            intended.total_minor,
+            received_on=latest + timedelta(days=rng.randint(1, 20)),
+        )
+        flag(
+            AnomalyKind.AMBIGUOUS_PAYMENT,
+            tuple(sorted(member.invoice_id for member in members)),
+            (payment_id,),
+            (len(members) - 1) * intended.total_minor,
+            intended.currency,
+            intended.invoice_id,
+        )
 
     for _ in range(config.anomaly_counts()[AnomalyKind.UNMATCHED_PAYMENT]):
         # The helper takes its customer, date and currency from an invoice, so borrow a random one
@@ -207,8 +253,13 @@ def generate_dataset(config: Config) -> Dataset:
     )
 
 
-def _plan_invoices(config: Config, rng: random.Random) -> dict[int, AnomalyKind | str]:
-    """Decide, for every invoice, whether it reconciles or carries a given anomaly."""
+def _plan_invoices(
+    config: Config, rng: random.Random
+) -> tuple[dict[int, AnomalyKind | str], list[tuple[int, ...]]]:
+    """Decide, for every invoice, whether it reconciles or carries a given anomaly.
+
+    Also returns the groups of look-alike invoices used for ambiguous payments.
+    """
     order = list(range(config.invoices))
     rng.shuffle(order)
     plan: dict[int, AnomalyKind | str] = dict.fromkeys(order, _SINGLE)
@@ -230,7 +281,16 @@ def _plan_invoices(config: Config, rng: random.Random) -> dict[int, AnomalyKind 
         for index in order[cursor : cursor + count]:
             plan[index] = outcome
         cursor += count
-    return plan
+
+    groups: list[tuple[int, ...]] = []
+    for _ in range(config.anomaly_counts()[AnomalyKind.AMBIGUOUS_PAYMENT]):
+        size = rng.choice((2, 3))
+        members = tuple(order[cursor : cursor + size])
+        for index in members:
+            plan[index] = AnomalyKind.AMBIGUOUS_PAYMENT
+        groups.append(members)
+        cursor += size
+    return plan, groups
 
 
 def apply_corrections(dataset: Dataset, *, seed: int, fix_fraction: float = 0.6) -> Dataset:
@@ -264,13 +324,16 @@ def apply_corrections(dataset: Dataset, *, seed: int, fix_fraction: float = 0.6)
 
     matches = list(dataset.truth.matches)
     remaining: list[Anomaly] = []
+    created: list[Anomaly] = []
     resolved = list(dataset.truth.resolved)
+    every_id = [a.anomaly_id for a in dataset.truth.anomalies] + resolved
+    next_anomaly = max(int(anomaly_id.removeprefix("A-")) for anomaly_id in every_id) + 1
 
     for anomaly in dataset.truth.anomalies:
         if anomaly.anomaly_id not in chosen:
             remaining.append(anomaly)
             continue
-        invoice = invoices[anomaly.invoice_ids[0]]
+        invoice = invoices[anomaly.intended_invoice_id or anomaly.invoice_ids[0]]
         ids: tuple[str, ...]
         if anomaly.kind is AnomalyKind.MISSING_PAYMENT:
             ids = (add_payment(invoice, invoice.total_minor),)
@@ -283,9 +346,24 @@ def apply_corrections(dataset: Dataset, *, seed: int, fix_fraction: float = 0.6)
         elif anomaly.kind is AnomalyKind.PARTIAL_PAYMENT:
             paid = sum(payments[pid].amount_minor for pid in anomaly.payment_ids)
             ids = (*anomaly.payment_ids, add_payment(invoice, invoice.total_minor - paid))
-        else:  # MISREFERENCED_PAYMENT
+        else:  # MISREFERENCED_PAYMENT or AMBIGUOUS_PAYMENT
             ids = anomaly.payment_ids
             payments[ids[0]] = replace(payments[ids[0]], reference=invoice.invoice_id)
+            # Once the payment is assigned, the look-alike invoices are plainly unpaid.
+            for other_id in anomaly.invoice_ids:
+                if other_id != invoice.invoice_id and anomaly.kind is AnomalyKind.AMBIGUOUS_PAYMENT:
+                    other = invoices[other_id]
+                    created.append(
+                        Anomaly(
+                            anomaly_id=f"A-{next_anomaly:04d}",
+                            kind=AnomalyKind.MISSING_PAYMENT,
+                            invoice_ids=(other_id,),
+                            payment_ids=(),
+                            variance_minor=other.total_minor,
+                            currency=other.currency,
+                        )
+                    )
+                    next_anomaly += 1
         matches.append(Match(invoice.invoice_id, ids, noisy_reference=False))
         resolved.append(anomaly.anomaly_id)
 
@@ -296,6 +374,8 @@ def apply_corrections(dataset: Dataset, *, seed: int, fix_fraction: float = 0.6)
         invoices=dataset.invoices,
         payments=(*payments.values(), *appended),
         truth=GroundTruth(
-            matches=tuple(matches), anomalies=tuple(remaining), resolved=tuple(resolved)
+            matches=tuple(matches),
+            anomalies=(*remaining, *created),
+            resolved=tuple(resolved),
         ),
     )

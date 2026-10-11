@@ -29,6 +29,7 @@ def truth_to_dict(dataset: Dataset) -> dict[str, Any]:
                 "payment_ids": list(a.payment_ids),
                 "variance_minor": a.variance_minor,
                 "currency": a.currency,
+                "intended_invoice_id": a.intended_invoice_id,
             }
             for a in truth.anomalies
         ],
