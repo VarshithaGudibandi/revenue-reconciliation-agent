@@ -1,14 +1,13 @@
 import csv
 import hashlib
 from collections import Counter
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from recon.datagen.generate import FIXABLE_KINDS, Config, apply_corrections, generate_dataset
 from recon.datagen.model import AnomalyKind, Dataset
-from recon.datagen.writer import format_minor, write_dataset
+from recon.datagen.writer import write_dataset
 
 SEEDS = range(20)
 
@@ -180,12 +179,6 @@ def test_files_use_the_documented_formats(tmp_path: Path) -> None:
         row["received_on"][2] == "/" and row["received_on"][5] == "/" for row in payment_rows
     )
     assert any("," in row["amount_paid"] for row in payment_rows)
-
-
-def test_written_amounts_round_trip_to_the_integers() -> None:
-    for amount in (1, 99, 100, 123_456, 100_000_000):
-        text = format_minor(amount, thousands=True)
-        assert int(Decimal(text.replace(",", "")) * 100) == amount
 
 
 @pytest.mark.parametrize("period", ["2026-13", "202601", "January", ""])

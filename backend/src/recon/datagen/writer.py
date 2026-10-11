@@ -4,12 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from recon.datagen.model import Dataset
-
-
-def format_minor(amount_minor: int, *, thousands: bool = False) -> str:
-    """Render an integer count of minor units as a decimal string with two places."""
-    whole, cents = divmod(amount_minor, 100)
-    return f"{whole:,}.{cents:02d}" if thousands else f"{whole}.{cents:02d}"
+from recon.domain.money import format_amount
 
 
 def truth_to_dict(dataset: Dataset) -> dict[str, Any]:
@@ -59,7 +54,7 @@ def write_dataset(dataset: Dataset, directory: Path) -> None:
                     invoice.customer_id,
                     invoice.issue_date.isoformat(),
                     invoice.currency,
-                    format_minor(invoice.total_minor),
+                    format_amount(invoice.total_minor, invoice.currency),
                 ]
             )
 
@@ -76,7 +71,7 @@ def write_dataset(dataset: Dataset, directory: Path) -> None:
                     payment.customer_id,
                     payment.received_on.strftime("%m/%d/%Y"),
                     payment.currency,
-                    format_minor(payment.amount_minor, thousands=True),
+                    format_amount(payment.amount_minor, payment.currency, thousands=True),
                 ]
             )
 
