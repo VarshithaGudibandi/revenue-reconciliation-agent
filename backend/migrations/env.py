@@ -4,6 +4,7 @@ from alembic import context
 
 from recon.config import Settings
 from recon.db import Base, create_db_engine
+from recon.persistence import models  # noqa: F401  (registers the tables on Base.metadata)
 
 config = context.config
 

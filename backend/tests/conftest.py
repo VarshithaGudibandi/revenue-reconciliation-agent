@@ -1,10 +1,14 @@
 import os
 import uuid
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture(scope="session")
@@ -30,3 +34,16 @@ def scratch_database_url(database_url: str) -> Iterator[str]:
         with admin.connect() as connection:
             connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
         admin.dispose()
+
+
+@pytest.fixture
+def session(scratch_database_url: str) -> Iterator[Session]:
+    """A session on a scratch database migrated to the latest revision."""
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", scratch_database_url)
+    command.upgrade(config, "head")
+
+    engine = create_engine(scratch_database_url)
+    with Session(engine) as db_session:
+        yield db_session
+    engine.dispose()
