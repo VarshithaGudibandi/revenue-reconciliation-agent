@@ -28,6 +28,21 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pyt
 
 The tests create and drop a scratch database for each test that needs one, so the database user must be allowed to create databases.
 
+## How a run works
+
+A profile holds the column mappings for each source file and the matching thresholds. Registering a file stores its content as a new version, with a snapshot of its normalized records; rows that cannot be normalized are kept with the reason. A run reads the latest version of each file for a period.
+
+When an earlier run exists with the same configuration, the new run compares the records of the two versions and matches again only the customers whose records changed, reusing the earlier result for the rest. Matching every customer again gives the same result.
+
+## Synthetic data
+
+The repository is public, so it only uses generated data. The generator writes an invoice export and a payment export with a known set of problems, a ground-truth file, and a second revision in which some of the problems are fixed at the source:
+
+```bash
+cd backend
+uv run python -m recon.datagen --out /tmp/recon-data --seed 42
+```
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -1,19 +1,11 @@
 import threading
 import uuid
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import Session, sessionmaker
 
 import recon.persistence.runs as runs_module
-from recon.datagen.generate import Config, apply_corrections, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
-from recon.datagen.model import Dataset
-from recon.datagen.writer import write_dataset
 from recon.engine.reconcile import reconcile
 from recon.evaluation.score import records_from_dataset, score
 from recon.persistence.models import (
@@ -23,7 +15,6 @@ from recon.persistence.models import (
     Run,
     RunInput,
 )
-from recon.persistence.repository import create_profile, register_file
 from recon.persistence.runs import (
     MissingInputsError,
     UnknownRunError,
@@ -34,58 +25,7 @@ from recon.persistence.runs import (
     summarize,
 )
 from recon.profiles import EngineSettings, ProfileConfig
-
-PERIOD = "2026-01"
-
-
-@dataclass
-class Env:
-    sessions: sessionmaker[Session]
-    profile_id: uuid.UUID
-    first: Dataset
-    second: Dataset
-    directories: tuple[Path, Path]
-
-    def register(self, source: str, revision: int) -> None:
-        with self.sessions.begin() as session:
-            register_file(
-                session,
-                profile_id=self.profile_id,
-                source_name=source,
-                period=PERIOD,
-                path=self.directories[revision] / f"{source}.csv",
-            )
-
-    def run_id(self) -> uuid.UUID:
-        with self.sessions.begin() as session:
-            return get_or_create_run(session, profile_id=self.profile_id, period=PERIOD).run.id
-
-
-@pytest.fixture
-def env(migrated_database_url: str, tmp_path: Path) -> Iterator[Env]:
-    first = generate_dataset(Config(seed=14, invoices=200, ambiguous_rate=0.04))
-    second = apply_corrections(first, seed=14)
-    write_dataset(first, tmp_path / "v1")
-    write_dataset(second, tmp_path / "v2")
-
-    engine = create_engine(migrated_database_url)
-    sessions = sessionmaker(engine)
-    with sessions.begin() as session:
-        profile_id = create_profile(
-            session,
-            name="demo",
-            reconciliation_type="invoice_payment",
-            config=ProfileConfig(
-                sources={"invoices": INVOICE_MAPPING, "payments": PAYMENT_MAPPING}
-            ),
-        ).id
-    yield Env(sessions, profile_id, first, second, (tmp_path / "v1", tmp_path / "v2"))
-    engine.dispose()
-
-
-def count(env: Env, model: type) -> int:
-    with env.sessions() as session:
-        return session.scalar(select(func.count()).select_from(model)) or 0
+from tests.conftest import PERIOD, Env, count
 
 
 def test_the_run_identity_depends_on_content_and_configuration() -> None:

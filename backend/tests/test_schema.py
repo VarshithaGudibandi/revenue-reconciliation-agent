@@ -225,3 +225,43 @@ def test_a_variance_needs_a_currency_and_the_reverse(session: Session) -> None:
     with pytest.raises(IntegrityError):
         session.add(ResultException(run_id=run.id, kind="x", variance_minor=5, currency=None))
         session.flush()
+
+
+def add_run(session: Session, profile: Profile, **extra: object) -> Run:
+    run = Run(
+        profile_id=profile.id,
+        period="2026-01",
+        input_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+        config_hash=SHA_B,
+        config_snapshot={},
+        **extra,
+    )
+    session.add(run)
+    session.flush()
+    return run
+
+
+def test_a_run_mode_must_be_known(session: Session) -> None:
+    profile = add_profile(session)
+    add_run(session, profile, mode="full")
+
+    with pytest.raises(IntegrityError):
+        add_run(session, profile, mode="partial")
+
+
+def test_an_incremental_run_names_its_base_and_a_full_run_has_none(session: Session) -> None:
+    profile = add_profile(session)
+    base = add_run(session, profile, mode="full")
+
+    add_run(session, profile, mode="incremental", base_run_id=base.id)
+    with pytest.raises(IntegrityError):
+        add_run(session, profile, mode="incremental")
+    session.rollback()
+
+
+def test_a_full_run_cannot_name_a_base(session: Session) -> None:
+    profile = add_profile(session)
+    base = add_run(session, profile, mode="full")
+
+    with pytest.raises(IntegrityError):
+        add_run(session, profile, mode="full", base_run_id=base.id)

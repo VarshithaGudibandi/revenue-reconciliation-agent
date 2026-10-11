@@ -8,6 +8,7 @@ and period, so concurrent registrations cannot produce duplicate or clashing ver
 import hashlib
 import re
 import uuid
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from recon.domain.money import Money
+from recon.ingestion.diff import Fingerprint
 from recon.ingestion.normalize import (
     NormalizedRecord,
     RejectedRow,
@@ -28,6 +30,7 @@ from recon.profiles import RECONCILIATION_SOURCES, ProfileConfig
 
 _PERIOD = re.compile(r"[0-9]{4}-(0[1-9]|1[0-2])")
 _INSERT_CHUNK = 5_000
+_IN_CHUNK = 10_000
 
 
 def check_period(period: str) -> None:
@@ -188,12 +191,25 @@ def latest_file_versions(
     return {version.source_name: version for version in versions}
 
 
-def load_records(session: Session, file_version_id: uuid.UUID) -> list[NormalizedRecord]:
-    rows = session.scalars(
-        select(SourceRecord)
-        .where(SourceRecord.file_version_id == file_version_id)
-        .order_by(SourceRecord.row_number)
-    )
+def load_records(
+    session: Session,
+    file_version_id: uuid.UUID,
+    counterparties: Collection[str] | None = None,
+) -> list[NormalizedRecord]:
+    """The records of a file version, optionally only those of the given counterparties."""
+    if counterparties is None:
+        batches: list[list[str] | None] = [None]
+    else:
+        wanted = sorted(counterparties)
+        batches = [wanted[i : i + _IN_CHUNK] for i in range(0, len(wanted), _IN_CHUNK)]
+
+    rows: list[SourceRecord] = []
+    for batch in batches:
+        query = select(SourceRecord).where(SourceRecord.file_version_id == file_version_id)
+        if batch is not None:
+            query = query.where(SourceRecord.counterparty.in_(batch))
+        rows.extend(session.scalars(query))
+    rows.sort(key=lambda row: row.row_number)
     return [
         NormalizedRecord(
             source_row=row.row_number,
@@ -204,6 +220,18 @@ def load_records(session: Session, file_version_id: uuid.UUID) -> list[Normalize
             amount=Money(row.amount_minor, row.currency),
         )
         for row in rows
+    ]
+
+
+def load_fingerprints(session: Session, file_version_id: uuid.UUID) -> list[Fingerprint]:
+    """Record ids, counterparties and content hashes of a file version, without the rest."""
+    return [
+        Fingerprint(record_id, counterparty, content_hash)
+        for record_id, counterparty, content_hash in session.execute(
+            select(
+                SourceRecord.record_id, SourceRecord.counterparty, SourceRecord.content_hash
+            ).where(SourceRecord.file_version_id == file_version_id)
+        )
     ]
 
 

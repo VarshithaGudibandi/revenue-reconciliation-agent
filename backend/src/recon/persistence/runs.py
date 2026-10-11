@@ -12,19 +12,23 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from recon.domain.money import Money
+from recon.engine.incremental import merge_incremental
 from recon.engine.model import (
+    EngineConfig,
     ExceptionKind,
     Match,
     ReconciliationException,
     ReconciliationResult,
 )
 from recon.engine.reconcile import reconcile
+from recon.ingestion.diff import diff_fingerprints
 from recon.persistence.models import (
     ResultException,
     ResultExceptionRecord,
@@ -39,6 +43,7 @@ from recon.persistence.repository import (
     check_period,
     get_profile,
     latest_file_versions,
+    load_fingerprints,
     load_records,
 )
 from recon.profiles import RECONCILIATION_SOURCES, ProfileConfig
@@ -54,6 +59,10 @@ class UnknownRunError(LookupError):
     pass
 
 
+class IncrementalMismatchError(RuntimeError):
+    """The incrementally computed result differs from a full recompute."""
+
+
 @dataclass(frozen=True)
 class RunHandle:
     run: Run
@@ -66,6 +75,10 @@ class RunSummary:
     status: str
     error: str | None
     finished_at: datetime | None
+    mode: str | None = None
+    base_run_id: uuid.UUID | None = None
+    partitions_total: int | None = None
+    partitions_recomputed: int | None = None
 
 
 def input_hash(content_hashes: Mapping[str, str], config_hash: str) -> str:
@@ -119,8 +132,20 @@ def get_or_create_run(session: Session, *, profile_id: uuid.UUID, period: str) -
     return RunHandle(session.get_one(Run, run_id), created=True)
 
 
-def run_reconciliation(sessions: sessionmaker[Session], run_id: uuid.UUID) -> RunSummary:
-    """Execute a run once. A run that is running or finished is returned unchanged."""
+def run_reconciliation(
+    sessions: sessionmaker[Session],
+    run_id: uuid.UUID,
+    *,
+    mode: Literal["auto", "full"] = "auto",
+    verify: bool = False,
+) -> RunSummary:
+    """Execute a run once. A run that is running or finished is returned unchanged.
+
+    In ``auto`` mode a run reuses the result of the latest earlier run with the same
+    configuration for the customers whose records did not change; ``full`` matches
+    everything again. ``verify`` also matches everything and fails the run if the two
+    results differ, which is a safety net while the incremental path is young.
+    """
     with sessions.begin() as session:
         claimed = session.execute(
             update(Run)
@@ -134,7 +159,7 @@ def run_reconciliation(sessions: sessionmaker[Session], run_id: uuid.UUID) -> Ru
 
     try:
         with sessions.begin() as session:
-            _execute(session, run_id)
+            _execute(session, run_id, mode, verify)
     except Exception as error:
         with sessions.begin() as session:
             session.execute(
@@ -156,12 +181,52 @@ def summarize(session: Session, run_id: uuid.UUID) -> RunSummary:
     run = session.get(Run, run_id)
     if run is None:
         raise UnknownRunError(f"no run {run_id}")
-    return RunSummary(run.id, run.status, run.error, run.finished_at)
+    return RunSummary(
+        run.id,
+        run.status,
+        run.error,
+        run.finished_at,
+        run.mode,
+        run.base_run_id,
+        run.partitions_total,
+        run.partitions_recomputed,
+    )
 
 
-def _execute(session: Session, run_id: uuid.UUID) -> None:
+def _execute(session: Session, run_id: uuid.UUID, mode: str, verify: bool) -> None:
     run = session.get_one(Run, run_id)
-    versions = {
+    versions = _run_versions(session, run_id)
+    engine_config = ProfileConfig.model_validate(run.config_snapshot).engine_config()
+
+    base = _find_base_run(session, run) if mode == "auto" else None
+    if base is None:
+        invoices = load_records(session, versions["invoices"].id)
+        payments = load_records(session, versions["payments"].id)
+        result = reconcile(invoices, payments, engine_config)
+        total = len({record.counterparty for record in (*invoices, *payments)})
+        recomputed = total
+    else:
+        result, total, recomputed = _reconcile_incrementally(
+            session, base, versions, engine_config, verify
+        )
+
+    _save_result(session, run_id, versions["invoices"].id, versions["payments"].id, result)
+    session.execute(
+        update(Run)
+        .where(Run.id == run_id)
+        .values(
+            status="succeeded",
+            finished_at=func.now(),
+            mode="full" if base is None else "incremental",
+            base_run_id=None if base is None else base.id,
+            partitions_total=total,
+            partitions_recomputed=recomputed,
+        )
+    )
+
+
+def _run_versions(session: Session, run_id: uuid.UUID) -> dict[str, SourceFileVersion]:
+    return {
         version.source_name: version
         for version in session.scalars(
             select(SourceFileVersion)
@@ -169,16 +234,70 @@ def _execute(session: Session, run_id: uuid.UUID) -> None:
             .where(RunInput.run_id == run_id)
         )
     }
-    config = ProfileConfig.model_validate(run.config_snapshot)
-    invoices = load_records(session, versions["invoices"].id)
-    payments = load_records(session, versions["payments"].id)
 
-    result = reconcile(invoices, payments, config.engine_config())
-    _save_result(session, run_id, versions["invoices"].id, versions["payments"].id, result)
 
-    session.execute(
-        update(Run).where(Run.id == run_id).values(status="succeeded", finished_at=func.now())
+def _find_base_run(session: Session, run: Run) -> Run | None:
+    """The latest finished run of the period computed with the same configuration."""
+    return session.scalars(
+        select(Run)
+        .where(
+            Run.profile_id == run.profile_id,
+            Run.period == run.period,
+            Run.config_hash == run.config_hash,
+            Run.status == "succeeded",
+            Run.id != run.id,
+        )
+        .order_by(Run.finished_at.desc())
+        .limit(1)
+    ).first()
+
+
+def _reconcile_incrementally(
+    session: Session,
+    base: Run,
+    versions: dict[str, SourceFileVersion],
+    config: EngineConfig,
+    verify: bool,
+) -> tuple[ReconciliationResult, int, int]:
+    base_versions = _run_versions(session, base.id)
+
+    dirty: set[str] = set()
+    present: set[str] = set()
+    counterparties: dict[str, dict[str, str]] = {}
+    for source in ("invoices", "payments"):
+        old = load_fingerprints(session, base_versions[source].id)
+        new = load_fingerprints(session, versions[source].id)
+        dirty |= diff_fingerprints(old, new).counterparties
+        present |= {fingerprint.counterparty for fingerprint in new}
+        # A record that moved appears under both counterparties; both are dirty, so
+        # which one the map holds does not matter.
+        counterparties[source] = {f.record_id: f.counterparty for f in old}
+        counterparties[source].update({f.record_id: f.counterparty for f in new})
+
+    recomputed = reconcile(
+        load_records(session, versions["invoices"].id, dirty),
+        load_records(session, versions["payments"].id, dirty),
+        config,
     )
+    result = merge_incremental(
+        load_result(session, base.id),
+        counterparties["invoices"],
+        counterparties["payments"],
+        dirty,
+        recomputed,
+    )
+
+    if verify:
+        full = reconcile(
+            load_records(session, versions["invoices"].id),
+            load_records(session, versions["payments"].id),
+            config,
+        )
+        if full != result:
+            raise IncrementalMismatchError(
+                f"incremental result differs from a full recompute (base run {base.id})"
+            )
+    return result, len(present), len(dirty & present)
 
 
 def _save_result(

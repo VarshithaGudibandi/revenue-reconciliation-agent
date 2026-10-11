@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     Integer,
     String,
     Text,
@@ -100,6 +101,7 @@ class SourceRecord(Base):
     __tablename__ = "source_record"
     __table_args__ = (
         UniqueConstraint("file_version_id", "record_id", name="uq_source_record_identity"),
+        Index("ix_source_record_version_counterparty", "file_version_id", "counterparty"),
         CheckConstraint(f"currency ~ '{CURRENCY_CODE}'", name="currency_format"),
         CheckConstraint(f"content_hash ~ '{SHA256_HEX}'", name="content_hash_format"),
     )
@@ -143,6 +145,10 @@ class Run(Base):
         ),
         CheckConstraint(f"input_hash ~ '{SHA256_HEX}'", name="input_hash_format"),
         CheckConstraint(f"config_hash ~ '{SHA256_HEX}'", name="config_hash_format"),
+        CheckConstraint("mode IN ('full', 'incremental')", name="mode_known"),
+        CheckConstraint(
+            "(mode = 'incremental') = (base_run_id IS NOT NULL)", name="incremental_has_base"
+        ),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
@@ -156,6 +162,12 @@ class Run(Base):
     created_at: Mapped[datetime] = created_at()
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # How a finished run got its result: from scratch, or by reusing the unchanged
+    # partitions of an earlier run.
+    mode: Mapped[str | None] = mapped_column(Text)
+    base_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("run.id"))
+    partitions_total: Mapped[int | None] = mapped_column(Integer)
+    partitions_recomputed: Mapped[int | None] = mapped_column(Integer)
 
 
 class RunInput(Base):
