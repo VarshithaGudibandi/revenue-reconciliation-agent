@@ -80,12 +80,12 @@ def test_profile_names_are_unique(session: Session) -> None:
         add_profile(session, "demo")
 
 
-def test_the_same_file_content_cannot_be_registered_twice(session: Session) -> None:
+def test_the_same_content_may_appear_in_several_versions(session: Session) -> None:
     profile = add_profile(session)
     add_version(session, profile, sha=SHA_A, number=1)
+    add_version(session, profile, sha=SHA_B, number=2)
 
-    with pytest.raises(IntegrityError):
-        add_version(session, profile, sha=SHA_A, number=2)
+    add_version(session, profile, sha=SHA_A, number=3)
 
 
 def test_version_numbers_are_unique_per_source_and_period(session: Session) -> None:

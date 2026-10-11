@@ -60,17 +60,15 @@ class Profile(Base):
 
 
 class SourceFileVersion(Base):
-    """One distinct content of a source file for a period. Never modified once written."""
+    """One state of a source file for a period. Never modified once written.
+
+    Versions form a history: registering content equal to the latest version changes
+    nothing, but content that matches an older version becomes a new version, so the
+    latest version is always what the source currently holds.
+    """
 
     __tablename__ = "source_file_version"
     __table_args__ = (
-        UniqueConstraint(
-            "profile_id",
-            "source_name",
-            "period",
-            "content_sha256",
-            name="uq_source_file_version_content",
-        ),
         UniqueConstraint(
             "profile_id",
             "source_name",

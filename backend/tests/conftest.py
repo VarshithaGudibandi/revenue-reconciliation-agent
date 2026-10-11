@@ -37,13 +37,17 @@ def scratch_database_url(database_url: str) -> Iterator[str]:
 
 
 @pytest.fixture
-def session(scratch_database_url: str) -> Iterator[Session]:
-    """A session on a scratch database migrated to the latest revision."""
+def migrated_database_url(scratch_database_url: str) -> str:
+    """A scratch database migrated to the latest revision."""
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", scratch_database_url)
     command.upgrade(config, "head")
+    return scratch_database_url
 
-    engine = create_engine(scratch_database_url)
+
+@pytest.fixture
+def session(migrated_database_url: str) -> Iterator[Session]:
+    engine = create_engine(migrated_database_url)
     with Session(engine) as db_session:
         yield db_session
     engine.dispose()
