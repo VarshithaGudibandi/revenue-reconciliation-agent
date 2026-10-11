@@ -13,7 +13,7 @@ Postgres holds all of these:
 - schedules and per-source ingestion state
 - agent workflow state that has to survive a restart while waiting for an answer
 
-File contents live in S3-compatible object storage, not in the database (MinIO locally). Domain state, meaning matches, cases and their history, lives in domain tables. Workflow checkpoints record where the agent stopped and are not the source of truth for any domain fact.
+File contents live in S3-compatible object storage, not in the database. Domain state, meaning matches, cases and their history, lives in domain tables. Workflow checkpoints record where the agent stopped and are not the source of truth for any domain fact.
 
 ## Consequences
 

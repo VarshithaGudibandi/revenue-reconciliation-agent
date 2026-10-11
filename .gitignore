@@ -23,7 +23,6 @@ frontend/dist/
 
 # Local data
 *.sqlite3
-.minio-data/
 .postgres-data/
 
 # Editors and OS
