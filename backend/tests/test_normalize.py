@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from recon.datagen.generate import Config, generate_dataset
+from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.model import AnomalyKind
 from recon.datagen.writer import write_dataset
 from recon.domain.money import Money
@@ -14,25 +15,6 @@ from recon.ingestion.normalize import (
     normalize_csv,
     normalize_reference,
     parse_date,
-)
-
-INVOICE_MAPPING = ColumnMapping(
-    record_id="invoice_id",
-    counterparty="customer_id",
-    date="issue_date",
-    amount="total",
-    currency="currency",
-    date_format="%Y-%m-%d",
-)
-
-PAYMENT_MAPPING = ColumnMapping(
-    record_id="payment_id",
-    counterparty="customer",
-    date="received_on",
-    amount="amount_paid",
-    currency="ccy",
-    reference="reference",
-    date_format="%m/%d/%Y",
 )
 
 
