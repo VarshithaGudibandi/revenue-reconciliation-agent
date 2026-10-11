@@ -289,10 +289,13 @@ class ExceptionCase(Base):
             "NOT fix_unverified OR status = 'open'",
             name="unverified_fix_is_open",
         ),
+        UniqueConstraint("number", name="uq_exception_case_number"),
         Index("ix_exception_case_profile_period", "profile_id", "period", "status"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
+    # Creation order, and a short reference people can quote.
+    number: Mapped[int] = mapped_column(BigInteger, Identity(always=False), nullable=False)
     profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profile.id"), nullable=False)
     period: Mapped[str] = mapped_column(String(7), nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")

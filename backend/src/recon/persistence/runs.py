@@ -89,8 +89,16 @@ def input_hash(content_hashes: Mapping[str, str], config_hash: str) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def get_or_create_run(session: Session, *, profile_id: uuid.UUID, period: str) -> RunHandle:
-    """The run for the latest files of a period, created if it does not exist yet."""
+@dataclass(frozen=True)
+class CurrentInputs:
+    config: ProfileConfig
+    config_hash: str
+    versions: dict[str, SourceFileVersion]
+    input_hash: str
+
+
+def current_inputs(session: Session, profile_id: uuid.UUID, period: str) -> CurrentInputs:
+    """What a run for the latest files of a period would read, and its identity."""
     check_period(period)
     profile = get_profile(session, profile_id)
     config = ProfileConfig.model_validate(profile.config)
@@ -102,7 +110,36 @@ def get_or_create_run(session: Session, *, profile_id: uuid.UUID, period: str) -
         raise MissingInputsError(f"no file registered for {', '.join(missing)} in {period}")
 
     config_hash = config.fingerprint()
-    run_hash = input_hash({name: versions[name].content_sha256 for name in sources}, config_hash)
+    content = {name: versions[name].content_sha256 for name in sources}
+    return CurrentInputs(
+        config,
+        config_hash,
+        {name: versions[name] for name in sources},
+        input_hash(content, config_hash),
+    )
+
+
+def find_current_run(session: Session, profile_id: uuid.UUID, period: str) -> Run | None:
+    """The run for the latest files of a period, if there is one."""
+    try:
+        inputs = current_inputs(session, profile_id, period)
+    except MissingInputsError:
+        return None
+    return session.scalars(
+        select(Run).where(
+            Run.profile_id == profile_id,
+            Run.period == period,
+            Run.input_hash == inputs.input_hash,
+        )
+    ).first()
+
+
+def get_or_create_run(session: Session, *, profile_id: uuid.UUID, period: str) -> RunHandle:
+    """The run for the latest files of a period, created if it does not exist yet."""
+    inputs = current_inputs(session, profile_id, period)
+    config, config_hash, run_hash = inputs.config, inputs.config_hash, inputs.input_hash
+    versions = inputs.versions
+    sources = tuple(versions)
 
     run_id = session.scalar(
         pg_insert(Run)
@@ -195,7 +232,7 @@ def summarize(session: Session, run_id: uuid.UUID) -> RunSummary:
 
 def _execute(session: Session, run_id: uuid.UUID, mode: str, verify: bool) -> None:
     run = session.get_one(Run, run_id)
-    versions = _run_versions(session, run_id)
+    versions = run_versions(session, run_id)
     engine_config = ProfileConfig.model_validate(run.config_snapshot).engine_config()
 
     base = _find_base_run(session, run) if mode == "auto" else None
@@ -225,7 +262,7 @@ def _execute(session: Session, run_id: uuid.UUID, mode: str, verify: bool) -> No
     )
 
 
-def _run_versions(session: Session, run_id: uuid.UUID) -> dict[str, SourceFileVersion]:
+def run_versions(session: Session, run_id: uuid.UUID) -> dict[str, SourceFileVersion]:
     return {
         version.source_name: version
         for version in session.scalars(
@@ -259,7 +296,7 @@ def _reconcile_incrementally(
     config: EngineConfig,
     verify: bool,
 ) -> tuple[ReconciliationResult, int, int]:
-    base_versions = _run_versions(session, base.id)
+    base_versions = run_versions(session, base.id)
 
     dirty: set[str] = set()
     present: set[str] = set()
