@@ -30,6 +30,11 @@ _PERIOD = re.compile(r"[0-9]{4}-(0[1-9]|1[0-2])")
 _INSERT_CHUNK = 5_000
 
 
+def check_period(period: str) -> None:
+    if not _PERIOD.fullmatch(period):
+        raise ValueError(f"period must look like YYYY-MM, got {period!r}")
+
+
 class ProfileExistsError(ValueError):
     pass
 
@@ -93,8 +98,7 @@ def register_file(
     Content equal to the latest version changes nothing. Anything else, including
     content that matches an older version, becomes the next version.
     """
-    if not _PERIOD.fullmatch(period):
-        raise ValueError(f"period must look like YYYY-MM, got {period!r}")
+    check_period(period)
     profile = get_profile(session, profile_id)
     mapping = ProfileConfig.model_validate(profile.config).sources.get(source_name)
     if mapping is None:
