@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -9,7 +10,8 @@ import pytest
 from alembic import command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import create_engine, func, select, text
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
 from recon.datagen.generate import Config, apply_corrections, generate_dataset
@@ -30,6 +32,23 @@ def database_url() -> str:
     return url
 
 
+def _drop(admin: Engine, name: str) -> None:
+    """Drop a scratch database, retrying briefly if Postgres' own autovacuum worker is on it.
+
+    The worker runs as the superuser, which a role that can merely create databases may not
+    terminate, so right after a test has written a lot the drop can be refused for a moment.
+    """
+    for attempt in range(8):
+        try:
+            with admin.connect() as connection:
+                connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            return
+        except ProgrammingError as error:
+            if "permission denied to terminate process" not in str(error) or attempt == 7:
+                raise
+            time.sleep(0.5)
+
+
 @pytest.fixture
 def scratch_database_url(database_url: str) -> Iterator[str]:
     """An empty database created for one test and dropped afterwards."""
@@ -41,9 +60,10 @@ def scratch_database_url(database_url: str) -> Iterator[str]:
     try:
         yield base.set(database=name).render_as_string(hide_password=False)
     finally:
-        with admin.connect() as connection:
-            connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
-        admin.dispose()
+        try:
+            _drop(admin, name)
+        finally:
+            admin.dispose()
 
 
 @pytest.fixture
