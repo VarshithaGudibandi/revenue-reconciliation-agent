@@ -1,0 +1,68 @@
+/* Colors come from the validated reference palette: one set of roles, stepped for each surface. */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6b6a66;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --wash: rgba(11, 11, 11, 0.05);
+  --series-1: #2a78d6;
+  --track: #cde2fb;
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --warning: #fab219;
+  --warning-ink: #7a5200;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --shadow: 0 8px 32px rgba(11, 11, 11, 0.16);
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #9a9892;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --wash: rgba(255, 255, 255, 0.06);
+    --series-1: #3987e5;
+    --track: #184f95;
+    --accent: #3987e5;
+    --accent-ink: #0d0d0d;
+    --good-ink: #0ca30c;
+    --warning-ink: #fab219;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #9a9892;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --wash: rgba(255, 255, 255, 0.06);
+  --series-1: #3987e5;
+  --track: #184f95;
+  --accent: #3987e5;
+  --accent-ink: #0d0d0d;
+  --good-ink: #0ca30c;
+  --warning-ink: #fab219;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}

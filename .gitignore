@@ -15,6 +15,9 @@ build/
 # Node
 node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+*.tsbuildinfo
 
 # Environment and secrets
 .env
@@ -23,6 +26,7 @@ frontend/dist/
 
 # Local data
 *.sqlite3
+backend/data/
 .postgres-data/
 
 # Editors and OS
