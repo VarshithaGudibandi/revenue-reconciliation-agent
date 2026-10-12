@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from recon.datagen.model import Dataset
-from recon.domain.money import format_amount
+from recon.datagen.styles import ExportStyles, export_truth, invoice_rows, payment_rows
 
 
 def truth_to_dict(dataset: Dataset) -> dict[str, Any]:
@@ -37,44 +37,26 @@ def truth_to_dict(dataset: Dataset) -> dict[str, Any]:
     }
 
 
-def write_dataset(dataset: Dataset, directory: Path) -> None:
-    """Write the two source exports and the ground truth.
+def write_dataset(dataset: Dataset, directory: Path, styles: ExportStyles | None = None) -> None:
+    """Write the two source exports, the ground truth, and the right mapping of each export.
 
-    The invoice system and the payment system deliberately use different column
-    names, date formats and number formats, as real exports do.
+    The invoice system and the payment system deliberately use different column names,
+    date formats and number formats, as real exports do. ``styles`` picks which.
     """
+    styles = styles or ExportStyles()
     directory.mkdir(parents=True, exist_ok=True)
 
-    with (directory / "invoices.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(["invoice_id", "customer_id", "issue_date", "currency", "total"])
-        for invoice in dataset.invoices:
-            writer.writerow(
-                [
-                    invoice.invoice_id,
-                    invoice.customer_id,
-                    invoice.issue_date.isoformat(),
-                    invoice.currency,
-                    format_amount(invoice.total_minor, invoice.currency),
-                ]
-            )
+    for name, (header, rows) in (
+        ("invoices.csv", invoice_rows(dataset, styles.invoice_style)),
+        ("payments.csv", payment_rows(dataset, styles.payment_style)),
+    ):
+        with (directory / name).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle, lineterminator="\n")
+            writer.writerow(header)
+            writer.writerows(rows)
 
-    with (directory / "payments.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(
-            ["payment_id", "reference", "customer", "received_on", "ccy", "amount_paid"]
-        )
-        for payment in dataset.payments:
-            writer.writerow(
-                [
-                    payment.payment_id,
-                    payment.reference,
-                    payment.customer_id,
-                    payment.received_on.strftime("%m/%d/%Y"),
-                    payment.currency,
-                    format_amount(payment.amount_minor, payment.currency, thousands=True),
-                ]
-            )
+    mapping_text = json.dumps(export_truth(dataset, styles), indent=2, sort_keys=True)
+    (directory / "mapping_truth.json").write_text(mapping_text + "\n", encoding="utf-8")
 
     truth_text = json.dumps(truth_to_dict(dataset), indent=2, sort_keys=True)
     (directory / "ground_truth.json").write_text(truth_text + "\n", encoding="utf-8")

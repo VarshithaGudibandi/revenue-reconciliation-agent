@@ -73,6 +73,12 @@ cd backend
 uv run python -m recon.datagen --out /tmp/recon-data --seed 42
 ```
 
+Real exports differ in header text, language, date format and number format, and they carry columns that look like the one you want. `--invoice-style` and `--payment-style` write the same data as one of several export styles, for example a German ERP export with `Bruttobetrag` and a decimal comma, a SAP-style export with `BELNR` and `BUDAT`, or a payment processor export with timestamps and a fee column next to the amount. Each run also writes `mapping_truth.json` with the correct column mapping, the lookalike columns that must not be mapped, and whether the date order can be told from the values at all. A test writes every style, reads it back with its true mapping and checks that the records equal the generated ones.
+
+```bash
+uv run python -m recon.datagen --out /tmp/recon-data --invoice-style german --payment-style processor
+```
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
