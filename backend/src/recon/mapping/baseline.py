@@ -46,6 +46,54 @@ NOT_THE_DATE_WORDS = (
 )
 
 
+AMOUNT_WORDS = (
+    "total",
+    "gross",
+    "amount",
+    "brutto",
+    "bruto",
+    "importe",
+    "wrbtr",
+    "amt",
+    "betrag",
+    "credit",
+)
+NOT_THE_AMOUNT_WORDS = (
+    "net",
+    "netto",
+    "tax",
+    "vat",
+    "iva",
+    "mwst",
+    "fee",
+    "base",
+    "imponible",
+    "excl",
+)
+CUSTOMER_WORDS = (
+    "customer",
+    "cust",
+    "cliente",
+    "client",
+    "kunde",
+    "kunnr",
+    "payer",
+    "auftraggeber",
+    "account",
+    "buyer",
+)
+REFERENCE_WORDS = (
+    "ref",
+    "reference",
+    "remit",
+    "verwendung",
+    "description",
+    "memo",
+    "invoice",
+    "narrative",
+)
+
+
 def _ranked(scores: Mapping[str, float]) -> list[tuple[str, float]]:
     return sorted(scores.items(), key=lambda item: (-item[1], item[0]))
 
@@ -214,6 +262,22 @@ def _date_format(column: ColumnProfile | None) -> ValueChoice:
     return value_choice(None, False, formats, ("more than one format fits",))
 
 
+def _date_format_for(profile: FileProfile, date: FieldChoice) -> ValueChoice:
+    """The date format, even when it is not yet known which date column is meant: if every
+    candidate column reads in the same single format, the format is settled either way."""
+    headers = [h for h in (date.column, *date.alternatives) if h is not None]
+    if not headers:
+        return value_choice()
+    if len(headers) == 1 or date.confident:
+        return _date_format(profile.column(headers[0]))
+    choices = [_date_format(profile.column(h)) for h in headers]
+    first = choices[0]
+    if first.confident and all(c.value == first.value and c.confident for c in choices):
+        return value_choice(first.value, True, reasons=("every candidate date column uses it",))
+    options = tuple(dict.fromkeys(f for h in headers for f in profile.column(h).date_formats()))
+    return value_choice(None, False, options, ("the date column is not settled",))
+
+
 def _dates(
     invoices: FileProfile,
     payments: FileProfile,
@@ -295,7 +359,7 @@ def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProp
                 "amount": inv_amount,
                 "currency": inv_cur,
             },
-            date_format=_date_format(invoices.column(inv_date.column) if inv_date.column else None),
+            date_format=_date_format_for(invoices, inv_date),
             decimal_separator=inv_sep,
         ),
         payments=FileProposal(
@@ -307,7 +371,65 @@ def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProp
                 "currency": pay_cur,
                 "reference": pay_ref,
             },
-            date_format=_date_format(payments.column(pay_date.column) if pay_date.column else None),
+            date_format=_date_format_for(payments, pay_date),
             decimal_separator=pay_sep,
         ),
+    )
+
+
+def _by_words(
+    columns: Sequence[ColumnProfile],
+    positive: Sequence[str],
+    negative: Sequence[str],
+    *,
+    what: str,
+) -> FieldChoice:
+    """Pick among columns by header words alone. Confident only when one column clearly
+    points the right way; with a single candidate there is nothing to compare."""
+    if not columns:
+        return field_choice()
+    if len(columns) == 1:
+        return field_choice(columns[0].header, True, reasons=(f"the only {what} column",))
+    scores = {c.header: float(lexicon_score(c.header, positive, negative)) for c in columns}
+    choice = _choose(scores, minimum=-100, margin=LEXICON_MARGIN, reason="header words")
+    if choice.column is not None and scores[choice.column] <= 0:
+        return field_choice(None, False, tuple(scores), ("no header word points to this field",))
+    return choice
+
+
+def propose_file(profile: FileProfile, role: str) -> FileProposal:
+    """A proposal for one file seen alone, as when the first of two files is uploaded.
+
+    There is nothing to compare against, so apart from the shapes of the values it is the
+    header words that decide, and the answer is often a question.
+    """
+    currency = _currency(profile)
+    separator = _separator(profile, currency.column)
+    amounts = [c for c in profile.columns if c.amount_like() and c.header != currency.column]
+    amount = _by_words(amounts, AMOUNT_WORDS, NOT_THE_AMOUNT_WORDS, what="amount")
+    dates = [c for c in profile.columns if c.date_like()]
+    date = _by_words(dates, DATE_WORDS, NOT_THE_DATE_WORDS, what="date")
+
+    pool = _pool(profile, set())
+    id_words = INVOICE_ID_WORDS if role == "invoices" else PAYMENT_ID_WORDS
+    record_id = _record_id(pool, id_words)
+    rest = [c for c in pool if c.header != record_id.column]
+    varied = [c for c in rest if c.distinct >= 2 and c.unique_share < 0.95]
+    counterparty = _by_words(varied, CUSTOMER_WORDS, (), what="customer")
+
+    fields = {
+        "record_id": record_id,
+        "counterparty": counterparty,
+        "date": date,
+        "amount": amount,
+        "currency": currency,
+    }
+    if role == "payments":
+        left = [c for c in rest if c.header != counterparty.column]
+        reference = _by_words(left, REFERENCE_WORDS, (), what="reference")
+        fields["reference"] = reference
+    return FileProposal(
+        fields=fields,
+        date_format=_date_format_for(profile, date),
+        decimal_separator=separator,
     )

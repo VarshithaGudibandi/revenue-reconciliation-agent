@@ -193,6 +193,54 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
         },
         "%Y%m%d",
     ),
+    # Stress styles: vocabularies the baseline mapper's word lists do not cover, and one whose
+    # headers say nothing at all. They exist to show where header words stop working.
+    "italian": _style(
+        "invoices",
+        {
+            "record_id": "Numero fattura",
+            "counterparty": "Ragione sociale",
+            "date": "Data documento",
+            "due_date": "Scadenza",
+            "currency": "Valuta",
+            "net_amount": "Imponibile",
+            "tax_amount": "Imposta",
+            "amount": "Importo totale",
+        },
+        "%d/%m/%Y",
+        decimal_separator=",",
+        thousands=True,
+    ),
+    "dutch": _style(
+        "invoices",
+        {
+            "record_id": "Factuurnummer",
+            "counterparty": "Debiteur",
+            "date": "Factuurdatum",
+            "due_date": "Vervaldatum",
+            "currency": "Valuta",
+            "net_amount": "Bedrag excl. BTW",
+            "tax_amount": "BTW",
+            "amount": "Totaalbedrag",
+        },
+        "%d-%m-%Y",
+        decimal_separator=",",
+        thousands=True,
+    ),
+    "generic_columns": _style(
+        "invoices",
+        {
+            "record_id": "Column A",
+            "counterparty": "Column B",
+            "due_date": "Column C",
+            "date": "Column D",
+            "currency": "Column E",
+            "net_amount": "Column F",
+            "tax_amount": "Column G",
+            "amount": "Column H",
+        },
+        "%m/%d/%Y",
+    ),
     # Held out: modelled on publicly described layouts of accounting and payment products,
     # added before the baseline mapper was written and never tuned against. The headers
     # come from secondhand descriptions, not from an official export.
@@ -279,6 +327,51 @@ PAYMENT_STYLES: dict[str, SourceStyle] = {
         },
         "%Y-%m-%d",
     ),
+    "french_bank": _style(
+        "payments",
+        {
+            "record_id": "Référence opération",
+            "date": "Date d'opération",
+            "value_date": "Date de valeur",
+            "counterparty": "Donneur d'ordre",
+            "reference": "Libellé",
+            "currency": "Devise",
+            "amount": "Montant",
+        },
+        "%d/%m/%Y",
+        decimal_separator=",",
+        thousands=True,
+    ),
+    "dutch_bank": _style(
+        "payments",
+        {
+            "record_id": "Transactienummer",
+            "date": "Boekdatum",
+            "value_date": "Valutadatum",
+            "counterparty": "Naam tegenpartij",
+            "reference": "Omschrijving",
+            "currency": "Valuta",
+            "amount": "Bedrag",
+            "bank_ref": "Banknummer",
+        },
+        "%d-%m-%Y",
+        decimal_separator=",",
+        thousands=True,
+    ),
+    "generic_columns": _style(
+        "payments",
+        {
+            "record_id": "Column A",
+            "value_date": "Column B",
+            "date": "Column C",
+            "counterparty": "Column D",
+            "reference": "Column E",
+            "currency": "Column F",
+            "fee_amount": "Column G",
+            "amount": "Column H",
+        },
+        "%m/%d/%Y",
+    ),
     "stripe_like": _style(
         "payments",
         {
@@ -297,6 +390,21 @@ PAYMENT_STYLES: dict[str, SourceStyle] = {
 
 # Styles that were added to measure a mapper on layouts it was not built around.
 HELD_OUT_STYLES = {"invoices": ("xero_like",), "payments": ("stripe_like",)}
+
+# Styles built to be hard for a mapper that relies on header words.
+STRESS_STYLES = {
+    "invoices": ("italian", "dutch", "generic_columns"),
+    "payments": ("french_bank", "dutch_bank", "generic_columns"),
+}
+
+
+def style_group(invoices: str, payments: str) -> str:
+    """Which evaluation group a pair of styles belongs to: development, held_out or stress."""
+    if invoices in STRESS_STYLES["invoices"] or payments in STRESS_STYLES["payments"]:
+        return "stress"
+    if invoices in HELD_OUT_STYLES["invoices"] or payments in HELD_OUT_STYLES["payments"]:
+        return "held_out"
+    return "development"
 
 
 @dataclass(frozen=True)

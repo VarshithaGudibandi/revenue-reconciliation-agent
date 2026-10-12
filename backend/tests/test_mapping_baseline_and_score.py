@@ -4,12 +4,12 @@ from pathlib import Path
 import pytest
 
 from recon.datagen.generate import Config, generate_dataset
-from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
+from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, STRESS_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
-from recon.evaluation.mapping_eval import run_case, run_evaluation, summarize
+from recon.evaluation.mapping_eval import each_file_alone, run_case, run_evaluation, summarize
 from recon.evaluation.mapping_score import classify, judge
 from recon.ingestion.normalize import normalize_csv
-from recon.mapping.baseline import propose_mapping
+from recon.mapping.baseline import propose_file, propose_mapping
 from recon.mapping.profile import FileProfile, profile_csv_bytes
 from recon.mapping.proposal import FileProposal, MappingProposal, field_choice, value_choice
 
@@ -22,8 +22,8 @@ def proposal_for(styles: ExportStyles, tmp_path: Path, seed: int = 0) -> Mapping
     )
 
 
-@pytest.mark.parametrize("payments", sorted(PAYMENT_STYLES))
-@pytest.mark.parametrize("invoices", sorted(INVOICE_STYLES))
+@pytest.mark.parametrize("payments", sorted(set(PAYMENT_STYLES) - set(STRESS_STYLES["payments"])))
+@pytest.mark.parametrize("invoices", sorted(set(INVOICE_STYLES) - set(STRESS_STYLES["invoices"])))
 def test_the_proposed_mapping_reads_the_generated_files_exactly(
     invoices: str, payments: str, tmp_path: Path
 ) -> None:
@@ -181,12 +181,69 @@ def test_the_baseline_is_never_confidently_wrong_on_generated_exports() -> None:
     results = run_evaluation(propose_mapping, seeds=range(2), size=100)
 
     counts = summarize(results)
-    for label in ("development", "held_out"):
+    for label in ("development", "held_out", "stress"):
         assert counts[label]["files"] > 0
         assert counts[label]["files_wrong"] == 0
         assert counts[label]["files_missed"] == 0
         assert counts[label]["fields_wrong"] == 0
-    full_month = [r for r in results if r.variant == "full_month"]
-    assert all(
-        classify(r.invoices) == "exact" and classify(r.payments) == "exact" for r in full_month
+    easy = [r for r in results if r.variant == "full_month" and r.group != "stress"]
+    assert all(classify(r.invoices) == "exact" and classify(r.payments) == "exact" for r in easy)
+    # the stress styles are there to be hard: some of them must still need the user
+    assert counts["stress"]["files_needs_user"] > 0
+
+
+def test_a_file_alone_is_mapped_by_header_words_and_never_confidently_wrong() -> None:
+    results = run_evaluation(each_file_alone(propose_file), seeds=range(2), size=100)
+
+    counts = summarize(results)
+    for label in ("development", "held_out", "stress"):
+        assert counts[label]["files_wrong"] == 0
+        assert counts[label]["files_missed"] == 0
+    # without the other file, header words are all there is, and they run out on the stress styles
+    stress, development = counts["stress"], counts["development"]
+    assert (
+        stress["files_needs_user"] / stress["files"]
+        > development["files_needs_user"] / development["files"]
     )
+
+
+def test_a_single_file_picks_the_gross_amount_from_header_words(tmp_path: Path) -> None:
+    write_dataset(generate_dataset(Config(seed=0, invoices=100)), tmp_path, ExportStyles("german"))
+
+    proposal = propose_file(
+        profile_csv_bytes("i.csv", (tmp_path / "invoices.csv").read_bytes()), "invoices"
+    )
+
+    assert proposal.choice("amount").column == "Bruttobetrag"
+    assert proposal.choice("amount").confident
+    assert proposal.decimal_separator.value == ","
+
+
+def test_a_single_file_with_meaningless_headers_asks_and_offers_the_right_column(
+    tmp_path: Path,
+) -> None:
+    write_dataset(
+        generate_dataset(Config(seed=0, invoices=100)), tmp_path, ExportStyles("generic_columns")
+    )
+
+    proposal = propose_file(
+        profile_csv_bytes("i.csv", (tmp_path / "invoices.csv").read_bytes()), "invoices"
+    )
+
+    amount = proposal.choice("amount")
+    assert not amount.confident
+    assert "Column H" in (amount.column, *amount.alternatives)
+    assert not proposal.confident
+
+
+def test_the_date_format_is_settled_when_every_candidate_date_column_shares_it() -> None:
+    profile = profile_csv_bytes(
+        "i.csv",
+        b"a,b,c\n2026-01-05,2026-02-04,x1\n2026-01-06,2026-02-05,x2\n2026-01-07,2026-02-06,x3\n",
+    )
+
+    proposal = propose_file(profile, "invoices")
+
+    assert not proposal.choice("date").confident  # which of the two dates is not known
+    assert proposal.date_format.value == "%Y-%m-%d"
+    assert proposal.date_format.confident

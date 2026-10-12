@@ -78,7 +78,16 @@ The baseline mapper (`mapping/baseline.py`) uses no language model. It decides f
 
 Every field is either confident or comes with the alternatives, so a user can be asked. `python -m recon.evaluation.mapping_eval` runs the mapper over every pair of export styles and reports, per field, whether it was correct, asked (the right answer was among the options), missed, or confidently wrong. The last is the one that matters. A second variant keeps only invoices from the first 12 days of the month, where the date order cannot be read from the values and asking is the right answer.
 
-On the generated exports the baseline reads all 30 style pairs correctly for every seed I ran, never confidently wrong, and asks about the date order and some amounts in the first-12-days variant. I wrote the generator, the styles and the baseline, so this shows that the baseline works on my data, not how it does on real exports. The two held-out styles were written first and never tuned against, but they are modelled on layouts I know about, so they are not an independent test either.
+Three groups of export styles are reported separately: development styles (the baseline was built around them), held-out styles (`xero_like`, `stripe_like`, written first and never tuned against) and stress styles (Italian, Dutch and French vocabularies the baseline's word lists do not cover, and `generic_columns`, whose headers are `Column A`, `Column B` and so on). `--mode single` maps each file on its own, as when the first of two files is uploaded, so there is no other file to cross-check against.
+
+Files by outcome, 3 seeds of 120 invoices, full month and first-12-days variants (`python -m recon.evaluation.mapping_eval --seeds 3 --mode paired|single`):
+
+| | development | held out | stress |
+|---|---|---|---|
+| both files together: exact / needs the user | 89% / 11% | 77% / 23% | 47% / 53% |
+| each file alone: exact / needs the user | 72% / 28% | 75% / 25% | 30% / 70% |
+
+No file in any group was confidently wrong, and no field was missed (a field is missed when the right answer is not among the options offered). Everything not exact is a question for the user. I wrote the generator, the styles and the baseline, so these numbers show how the baseline behaves on my data, not on real exports; the stress column is the part that says where header words run out.
 
 ## Synthetic data
 

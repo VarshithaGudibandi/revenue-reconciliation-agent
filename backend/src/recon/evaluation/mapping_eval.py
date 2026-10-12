@@ -2,8 +2,9 @@
 
     python -m recon.evaluation.mapping_eval --seeds 3
 
-Styles that were held out are reported separately: a mapper built around the others can look
-better on them than it should, and the held-out numbers are the honest ones.
+Styles are reported in three groups: development (the mapper was built around them), held out
+(written before the mapper and never tuned against) and stress (built to defeat header words).
+A mapper built around the first group looks better on it than it should.
 """
 
 import argparse
@@ -16,15 +17,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from recon.datagen.generate import Config, generate_dataset
-from recon.datagen.styles import HELD_OUT_STYLES, INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
+from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles, style_group
 from recon.datagen.writer import write_dataset
 from recon.evaluation.mapping_score import FILE_OUTCOMES, classify, score_file
 from recon.ingestion.normalize import ColumnMapping
-from recon.mapping.baseline import propose_mapping
+from recon.mapping.baseline import propose_file, propose_mapping
 from recon.mapping.profile import FileProfile, profile_csv_bytes
-from recon.mapping.proposal import MappingProposal
+from recon.mapping.proposal import FileProposal, MappingProposal
 
 Mapper = Callable[[FileProfile, FileProfile], MappingProposal]
+SingleFileMapper = Callable[[FileProfile, str], FileProposal]
+GROUPS = ("development", "held_out", "stress")
 VARIANTS = ("full_month", "first_12_days")
 
 
@@ -34,7 +37,7 @@ class CaseResult:
     payment_style: str
     variant: str
     seed: int
-    held_out: bool
+    group: str
     invoices: Mapping[str, str]
     payments: Mapping[str, str]
     details: tuple[str, ...]
@@ -44,11 +47,15 @@ class CaseResult:
         return classify(self.invoices), classify(self.payments)
 
 
-def _is_held_out(styles: ExportStyles) -> bool:
-    return (
-        styles.invoices in HELD_OUT_STYLES["invoices"]
-        or styles.payments in HELD_OUT_STYLES["payments"]
-    )
+def each_file_alone(mapper: SingleFileMapper) -> Mapper:
+    """Use a one-file mapper as a mapper of two files, giving each no sight of the other."""
+
+    def paired(invoices: FileProfile, payments: FileProfile) -> MappingProposal:
+        return MappingProposal(
+            invoices=mapper(invoices, "invoices"), payments=mapper(payments, "payments")
+        )
+
+    return paired
 
 
 def run_case(
@@ -95,7 +102,7 @@ def run_case(
         styles.payments,
         variant,
         seed,
-        _is_held_out(styles),
+        style_group(styles.invoices, styles.payments),
         invoices,
         payments,
         details,
@@ -117,8 +124,8 @@ def run_evaluation(
 def summarize(results: Sequence[CaseResult]) -> dict[str, dict[str, int]]:
     """File counts by outcome, and field counts by outcome, for dev and held-out cases."""
     summary: dict[str, dict[str, int]] = {}
-    for label, held_out in (("development", False), ("held_out", True)):
-        chosen = [r for r in results if r.held_out is held_out]
+    for label in GROUPS:
+        chosen = [r for r in results if r.group == label]
         files: Counter[str] = Counter()
         fields: Counter[str] = Counter()
         for r in chosen:
@@ -175,8 +182,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m recon.evaluation.mapping_eval")
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--invoices", type=int, default=120)
+    parser.add_argument(
+        "--mode",
+        choices=["paired", "single"],
+        default="paired",
+        help="paired: the mapper sees both files; single: each file is mapped on its own",
+    )
     args = parser.parse_args()
-    results = run_evaluation(propose_mapping, seeds=range(args.seeds), size=args.invoices)
+    mapper = propose_mapping if args.mode == "paired" else each_file_alone(propose_file)
+    results = run_evaluation(mapper, seeds=range(args.seeds), size=args.invoices)
     print(format_report(results))
 
 
