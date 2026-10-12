@@ -105,6 +105,25 @@ The answer is a structured output in which every column field can only be one of
 
 No answers are recorded in this repository yet, so there are no measured results for the model. The unit tests use a fake model, a stand-in for the API client and a recorded file written by the tests.
 
+## Adjudicating ambiguous payments
+
+The engine never decides which of several look-alike invoices a payment belongs to; it reports an `ambiguous_payment` case. `adjudication/` reads what the payer wrote and may suggest one. A suggestion is advice for a person to act on at the source, never a match.
+
+`adjudicate_by_rules` uses no model. It reads an invoice number in the memo (`inv 121`, `INV000121`, `invoice #121`, ignoring anything that reads as a year) or a word that only one invoice has, and it says nothing when the memo does not separate the candidates. It never decides from the order or the dates.
+
+`LlmAdjudicator` sends the memo as written and, for each candidate labelled A, B, C, its invoice number, what it is for and how many days before the payment it was issued. The customer, the amounts and the payment id are not sent. The model must answer with a label or `none`, a confidence, and a quote of the memo that its choice rests on. The engine relies on the choice only if the confidence is high and the quote is really in the memo; an invented quote makes the choice a suggestion. `combine_rulings` follows the same policy as the mapping stage: agreement is confident, a confident rule is not overruled, a model that is sure where the rules abstain is a suggestion, and two confident answers that disagree are left to a person.
+
+`python -m recon.evaluation.adjudication_eval --adjudicator rules|llm|llm-unchecked|hybrid` scores an adjudicator against the invoice the generator says was meant, by the kind of memo the payer wrote. On the generated data, 8 seeds of 200 invoices:
+
+| memo | cases | rules: correct | rules: abstained |
+|---|---|---|---|
+| explicit | 23 | 23 | 0 |
+| descriptive | 22 | 22 | 0 |
+| paraphrased | 26 | 0 | 26 |
+| useless | 25 | 0 | 25 |
+
+The rules are never confidently wrong. No adjudicator can do better than abstain on a useless memo, so 74% of these cases is the most that can be answered; the rules answer 47%, and the 27% that are paraphrased, with synonyms, other languages or typos, are what a model could add. There are no recorded model answers in this repository yet, so there is no measured result for the model; the unit tests use a fake one. Adjudication is not yet connected to the application: the memo is generated but not yet part of the exported files, the profiles or the case view.
+
 ## Synthetic data
 
 The repository is public, so it only uses generated data. The generator writes an invoice export and a payment export with a known set of problems, a ground-truth file, and a second revision in which some of the problems are fixed at the source:
@@ -114,7 +133,7 @@ cd backend
 uv run python -m recon.datagen --out /tmp/recon-data --seed 42
 ```
 
-Every generated invoice has a short description (`Hosting Jan 2026`) and every payment a memo, in the generator's data but not yet in the exported files. The memo of an ambiguous payment, one that could belong to two or three look-alike invoices, is one of three kinds that the ground truth records: `explicit` (it names the intended invoice, written the way people write it), `descriptive` (it says what it is for, which only the intended invoice matches) or `useless`. Look-alike invoices always read differently. The text comes from its own random stream, so it changes none of the numbers, dates or ids; a test pins the hashes of the default exports.
+Every generated invoice has a short description (`Hosting Jan 2026`) and every payment a memo, in the generator's data but not yet in the exported files. The memo of an ambiguous payment, one that could belong to two or three look-alike invoices, is one of four kinds that the ground truth records: `explicit` (it names the intended invoice, written the way people write it), `descriptive` (it says what it is for, in the words of the invoice), `paraphrased` (it says so in synonyms, another language or with a typo) or `useless`. Look-alike invoices always read differently. The text comes from its own random stream, so it changes none of the numbers, dates or ids; a test pins the hashes of the default exports.
 
 Real exports differ in header text, language, date format and number format, and they carry columns that look like the one you want. `--invoice-style` and `--payment-style` write the same data as one of several export styles, for example a German ERP export with `Bruttobetrag` and a decimal comma, a SAP-style export with `BELNR` and `BUDAT`, or a payment processor export with timestamps and a fee column next to the amount. Each run also writes `mapping_truth.json` with the correct column mapping, the lookalike columns that must not be mapped, and whether the date order can be told from the values at all. Two styles are held out, modelled on publicly described layouts of an accounting product and a payment processor (`xero_like`, `stripe_like`); I wrote them before the baseline mapper and don't tune against them. Their headers come from secondhand descriptions, not from an official export. A test writes every style, reads it back with its true mapping and checks that the records equal the generated ones.
 

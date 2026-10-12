@@ -9,7 +9,6 @@ A mapper built around the first group looks better on it than it should.
 
 import argparse
 import json
-import os
 import tempfile
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -19,12 +18,12 @@ from pathlib import Path
 from recon.datagen.generate import Config, first_days, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles, style_group
 from recon.datagen.writer import write_dataset
+from recon.evaluation.llm_cli import add_llm_arguments, cost_line, json_client
 from recon.evaluation.mapping_score import FILE_OUTCOMES, classify, score_file
 from recon.ingestion.normalize import ColumnMapping
 from recon.mapping.baseline import propose_file, propose_mapping
 from recon.mapping.combine import combine
 from recon.mapping.llm import LlmMapper
-from recon.mapping.llm_client import AnthropicJson, JsonModel, RecordingJson, ReplayJson
 from recon.mapping.pairing import Mapper, each_file_alone
 from recon.mapping.profile import FileProfile, profile_csv_bytes
 from recon.mapping.proposal import MappingProposal
@@ -167,33 +166,6 @@ def format_report(results: Sequence[CaseResult]) -> str:
     return "\n".join(lines)
 
 
-# List prices in US dollars per million input and output tokens, from the Claude API reference
-# cached on 2026-10-06. An estimate for planning: check current pricing before relying on it.
-LIST_PRICES = {
-    "claude-opus-5-5": (4.00, 20.00),
-    "claude-sonnet-5-5": (2.00, 10.00),
-    "claude-haiku-5-5": (0.10, 0.50),
-}
-
-
-def _llm_mapper(args: argparse.Namespace) -> LlmMapper:
-    client: JsonModel
-    if args.replay:
-        client = ReplayJson(Path(args.replay))
-        if not len(client):
-            raise SystemExit(f"{args.replay} holds no recorded answers")
-    else:
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            raise SystemExit(
-                "No ANTHROPIC_API_KEY is set and no --replay file was given, so there is "
-                "nothing to ask. Run with --mapper baseline, or replay recorded answers."
-            )
-        client = AnthropicJson(model=args.model, effort=args.effort)
-        if args.record:
-            client = RecordingJson(client, Path(args.record))
-    return LlmMapper(client, validate=args.mapper != "llm-unchecked")
-
-
 def _hybrid(rules: Mapper, model: Mapper) -> Mapper:
     def both(invoices: FileProfile, payments: FileProfile) -> MappingProposal:
         return combine(rules(invoices, payments), model(invoices, payments))
@@ -218,17 +190,14 @@ def main() -> None:
         default="paired",
         help="baseline only. paired: the mapper sees both files; single: each file alone",
     )
-    parser.add_argument("--model", default="claude-opus-5-5")
-    parser.add_argument("--effort", default="low", choices=["low", "medium", "high"])
-    parser.add_argument("--replay", help="serve answers recorded in this file; no network")
-    parser.add_argument("--record", help="append the live answers to this file")
+    add_llm_arguments(parser)
     args = parser.parse_args()
 
     llm: LlmMapper | None = None
     if args.mapper == "baseline":
         mapper = propose_mapping if args.mode == "paired" else each_file_alone(propose_file)
     else:
-        llm = _llm_mapper(args)
+        llm = LlmMapper(json_client(args), validate=args.mapper != "llm-unchecked")
         mapper = each_file_alone(llm.propose_file)
         if args.mapper == "hybrid":
             mapper = _hybrid(propose_mapping, mapper)
@@ -239,13 +208,9 @@ def main() -> None:
         print(f"\nmodel calls: {llm.calls}, errors: {len(llm.errors)}")
         for message in llm.errors[:5]:
             print(f"  {message}")
-        price = LIST_PRICES.get(args.model)
-        if price and llm.calls:
-            cost = llm.input_tokens / 1e6 * price[0] + llm.output_tokens / 1e6 * price[1]
-            print(
-                f"tokens: {llm.input_tokens} in, {llm.output_tokens} out; "
-                f"about ${cost:.2f} at list price for {args.model}"
-            )
+        line = cost_line(args.model, llm.input_tokens, llm.output_tokens)
+        if line and llm.calls:
+            print(line)
 
 
 if __name__ == "__main__":

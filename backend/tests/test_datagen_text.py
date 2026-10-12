@@ -7,7 +7,7 @@ import pytest
 
 from recon.datagen.generate import Config, apply_corrections, generate_dataset
 from recon.datagen.model import Anomaly, AnomalyKind, Dataset
-from recon.datagen.text import MEMO_KINDS, SERVICES, add_text
+from recon.datagen.text import MEMO_KINDS, PARAPHRASES, SERVICES, add_text
 from recon.datagen.writer import write_dataset
 
 SEEDS = range(12)
@@ -68,7 +68,7 @@ def test_look_alike_invoices_read_differently(seed: int) -> None:
         assert len(set(group)) == len(group)
 
 
-def test_all_three_kinds_of_memo_occur_and_are_recorded() -> None:
+def test_all_four_kinds_of_memo_occur_and_are_recorded() -> None:
     kinds = {a.memo_kind for seed in SEEDS for a in ambiguous(dataset_for(seed))}
 
     assert kinds == set(MEMO_KINDS)
@@ -150,3 +150,30 @@ def test_the_ground_truth_file_records_the_memo_kind(tmp_path: Path) -> None:
     recorded = {a["anomaly_id"]: a["memo_kind"] for a in truth["anomalies"]}
     expected = {a.anomaly_id: a.memo_kind for a in dataset.truth.anomalies}
     assert recorded == expected
+
+
+def test_no_paraphrase_contains_a_word_of_the_service_it_stands_for() -> None:
+    for service, phrases in PARAPHRASES.items():
+        words = {w for w in re.findall(r"[a-zà-ÿ]{4,}", service.lower())}
+        for phrase in phrases:
+            assert not words & set(re.findall(r"[a-zà-ÿ]+", phrase.lower())), (service, phrase)
+    assert set(PARAPHRASES) == set(SERVICES)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_paraphrased_memo_names_only_the_intended_service_in_other_words(seed: int) -> None:
+    dataset = dataset_for(seed)
+    memos = {p.payment_id: p.memo.lower() for p in dataset.payments}
+    services = {i.invoice_id: i.description.rsplit(" ", 2)[0] for i in dataset.invoices}
+
+    for anomaly in ambiguous(dataset):
+        if anomaly.memo_kind != "paraphrased":
+            continue
+        memo = memos[anomaly.payment_ids[0]]
+        matching = [
+            i
+            for i in anomaly.invoice_ids
+            if any(p.lower() in memo for p in PARAPHRASES[services[i]])
+        ]
+        assert matching == [anomaly.intended_invoice_id]
+        assert not any(services[i].lower() in memo for i in anomaly.invoice_ids)

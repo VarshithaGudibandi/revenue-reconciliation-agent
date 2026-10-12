@@ -5,7 +5,9 @@ was meant for. Ambiguous payments get one of three kinds of memo, recorded in th
 truth, so a reader of the memo can be scored against what the payer meant:
 
 * ``explicit``: names the intended invoice, in a form people actually type;
-* ``descriptive``: says what the payment is for, which only the intended invoice matches;
+* ``descriptive``: says what the payment is for, using the words of the invoice;
+* ``paraphrased``: says what it is for in other words, another language or with a typo, so that
+  matching the invoice's own words finds nothing;
 * ``useless``: says nothing that tells the invoices apart.
 
 The text comes from a random stream of its own, so adding it changes none of the numbers,
@@ -28,8 +30,30 @@ SERVICES = (
     "Data storage",
 )
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-MEMO_KINDS = ("explicit", "descriptive", "useless")
-_MEMO_WEIGHTS = (35, 35, 30)
+MEMO_KINDS = ("explicit", "descriptive", "paraphrased", "useless")
+_MEMO_WEIGHTS = (25, 20, 30, 25)
+
+# Ways a payer might say what a service is, none of which contains a word of its English name.
+PARAPHRASES = {
+    "Hosting": ("cloud servers", "webspace rental", "hostng", "Webspace-Miete"),
+    "Support plan": (
+        "helpdesk subscription",
+        "premium assistance",
+        "Helpdesk-Abo",
+        "soporte técnico",
+    ),
+    "Consulting": ("advisory work", "consultancy hours", "Beratung", "asesoría"),
+    "Licence renewal": (
+        "software seat fees",
+        "annual seats",
+        "Lizenzverlängerung",
+        "renovación de licencia",
+    ),
+    "Training": ("staff workshop", "course fees", "Schulung", "formación"),
+    "Implementation": ("rollout project", "go-live work", "Einführung", "puesta en marcha"),
+    "Maintenance": ("upkeep contract", "servicing fees", "Wartung", "mantenimiento"),
+    "Data storage": ("archive space", "backup volume", "Speicherplatz", "almacenamiento"),
+}
 _USELESS = ("Payment", "Thank you", "Bank transfer", "Payment as agreed", "")
 _GENERIC = ("", "", "Payment", "Bank transfer", "Thank you", "As per invoice")
 _TEMPLATES = ("{}", "pls apply to {}", "payment for {}", "{} thanks", "Re: {}")
@@ -65,6 +89,12 @@ def _descriptive(service: str, year: int, month: int, rng: random.Random) -> str
     )
 
 
+def _paraphrased(service: str, rng: random.Random) -> str:
+    return rng.choice(("{}", "pago {}", "payment {}", "{} thx")).format(
+        rng.choice(PARAPHRASES[service])
+    )
+
+
 def add_text(dataset: Dataset) -> Dataset:
     """Return the dataset with invoice descriptions, payment memos and the memo kinds recorded."""
     rng = random.Random(f"{dataset.seed}:text")
@@ -97,6 +127,8 @@ def add_text(dataset: Dataset) -> Dataset:
             memo = _explicit(intended_of[payment.payment_id], rng)
         elif kind == "descriptive":
             memo = _descriptive(service[intended_of[payment.payment_id]], year, month, rng)
+        elif kind == "paraphrased":
+            memo = _paraphrased(service[intended_of[payment.payment_id]], rng)
         elif kind == "useless":
             memo = rng.choice(_USELESS)
         else:
