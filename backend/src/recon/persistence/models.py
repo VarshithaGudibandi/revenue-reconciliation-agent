@@ -114,6 +114,7 @@ class SourceRecord(Base):
     row_number: Mapped[int] = mapped_column(Integer, nullable=False)
     record_id: Mapped[str] = mapped_column(Text, nullable=False)
     reference: Mapped[str | None] = mapped_column(Text)
+    free_text: Mapped[str | None] = mapped_column(Text)
     counterparty: Mapped[str] = mapped_column(Text, nullable=False)
     occurred_on: Mapped[date] = mapped_column(Date, nullable=False)
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)

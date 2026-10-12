@@ -449,6 +449,7 @@ def case_detail_out(session: Session, case_id: uuid.UUID) -> CaseDetailOut:
                 if fact.amount is None
                 else amount_of(fact.amount.minor, fact.amount.currency),
                 in_current_files=record is not None,
+                text=None if record is None else record.free_text,
             )
         )
     return CaseDetailOut(

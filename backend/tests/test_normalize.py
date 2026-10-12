@@ -12,6 +12,7 @@ from recon.ingestion.normalize import (
     ColumnMapping,
     MappingError,
     NormalizationError,
+    NormalizationResult,
     normalize_csv,
     normalize_reference,
     parse_date,
@@ -152,3 +153,68 @@ def test_reads_european_number_formats(tmp_path: Path) -> None:
     assert result.rejected == ()
     assert result.records[0].amount == Money(123_450, "EUR")
     assert result.records[0].occurred_on == date(2026, 1, 31)
+
+
+def _read(tmp_path: Path, text: str, mapping: ColumnMapping) -> NormalizationResult:
+    path = tmp_path / "f.csv"
+    path.write_text(text, encoding="utf-8")
+    return normalize_csv(path, mapping)
+
+
+TEXT_MAPPING = ColumnMapping(
+    record_id="id",
+    counterparty="who",
+    date="day",
+    amount="amt",
+    currency="ccy",
+    text="note",
+    date_format="%Y-%m-%d",
+)
+
+
+def test_free_text_is_read_with_its_whitespace_collapsed_and_empty_text_is_none(
+    tmp_path: Path,
+) -> None:
+    result = _read(
+        tmp_path,
+        "id,who,day,amt,ccy,note\n"
+        'A1,C1,2026-01-05,10.00,USD,"  pls   apply to\tinv 121 "\n'
+        "A2,C1,2026-01-06,10.00,USD,\n",
+        TEXT_MAPPING,
+    )
+
+    assert [r.text for r in result.records] == ["pls apply to inv 121", None]
+
+
+def test_a_missing_text_column_is_reported_like_any_other(tmp_path: Path) -> None:
+    with pytest.raises(MappingError, match="note"):
+        _read(tmp_path, "id,who,day,amt,ccy\nA1,C1,2026-01-05,10.00,USD\n", TEXT_MAPPING)
+
+
+def test_a_mapping_without_text_reads_none_and_keeps_the_hash_it_always_had(
+    tmp_path: Path,
+) -> None:
+    without = TEXT_MAPPING.model_copy(update={"text": None})
+    csv = "id,who,day,amt,ccy,note\nA1,C1,2026-01-05,10.00,USD,hello\n"
+
+    plain = _read(tmp_path, csv, without).records[0]
+    texted = _read(tmp_path, csv, TEXT_MAPPING).records[0]
+
+    assert plain.text is None
+    assert texted.text == "hello"
+    assert plain.content_hash != texted.content_hash
+    # the hash of a record without text is the one computed before text existed
+    import hashlib
+    import json
+
+    legacy = [plain.record_id, plain.reference, plain.counterparty, "2026-01-05", 1000, "USD"]
+    expected = hashlib.sha256(json.dumps(legacy, separators=(",", ":")).encode()).hexdigest()
+    assert plain.content_hash == expected
+
+
+def test_changed_text_is_a_changed_record(tmp_path: Path) -> None:
+    head = "id,who,day,amt,ccy,note\n"
+    a = _read(tmp_path, head + "A1,C1,2026-01-05,10.00,USD,hosting\n", TEXT_MAPPING).records[0]
+    b = _read(tmp_path, head + "A1,C1,2026-01-05,10.00,USD,training\n", TEXT_MAPPING).records[0]
+
+    assert a.content_hash != b.content_hash

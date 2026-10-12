@@ -339,3 +339,25 @@ def test_concurrent_registrations_of_different_content_get_distinct_versions(
 
     assert sorted(numbers) == [1, 2, 3, 4, 5, 6]
     engine.dispose()
+
+
+def test_free_text_is_stored_with_each_record(session: Session, tmp_path: Path) -> None:
+    mapping = INVOICE_MAPPING.model_copy(update={"text": "note"})
+    config = ProfileConfig(sources={"invoices": mapping, "payments": PAYMENT_MAPPING})
+    profile = create_profile(
+        session, name="texted", reconciliation_type="invoice_payment", config=config
+    )
+    path = tmp_path / "invoices.csv"
+    path.write_text(
+        "invoice_id,customer_id,issue_date,currency,total,note\n"
+        "INV-1,C1,2026-01-05,USD,10.00,Hosting Jan 2026\n"
+        "INV-2,C1,2026-01-06,USD,20.00,\n",
+        encoding="utf-8",
+    )
+
+    register_file(
+        session, profile_id=profile.id, source_name="invoices", period="2026-01", path=path
+    )
+
+    stored = dict(session.execute(select(SourceRecord.record_id, SourceRecord.free_text)).all())
+    assert stored == {"INV-1": "Hosting Jan 2026", "INV-2": None}

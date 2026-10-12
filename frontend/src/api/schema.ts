@@ -870,6 +870,8 @@ export interface components {
              * @enum {string}
              */
             role: "invoice" | "payment";
+            /** Text */
+            text?: string | null;
         };
         /** RunOut */
         RunOut: {

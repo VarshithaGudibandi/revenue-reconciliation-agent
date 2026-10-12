@@ -37,6 +37,8 @@ class ColumnMapping(BaseModel, frozen=True):
     amount: str
     currency: str
     reference: str | None = None
+    # Free text the source holds about the record: what an invoice is for, or what a payer wrote.
+    text: str | None = None
     date_format: str
     decimal_separator: Literal[".", ","] = "."
 
@@ -44,6 +46,8 @@ class ColumnMapping(BaseModel, frozen=True):
         columns = [self.record_id, self.counterparty, self.date, self.amount, self.currency]
         if self.reference is not None:
             columns.append(self.reference)
+        if self.text is not None:
+            columns.append(self.text)
         return tuple(columns)
 
 
@@ -55,6 +59,7 @@ class NormalizedRecord:
     counterparty: str
     occurred_on: date
     amount: Money
+    text: str | None = None
 
     @property
     def content_hash(self) -> str:
@@ -67,6 +72,9 @@ class NormalizedRecord:
             self.amount.minor,
             self.amount.currency,
         ]
+        if self.text is not None:
+            # Left out when there is none, so records read before text existed keep their hash.
+            content.append(self.text)
         return hashlib.sha256(json.dumps(content, separators=(",", ":")).encode()).hexdigest()
 
     @property
@@ -160,6 +168,7 @@ def _normalize_row(
     )
 
     reference = cells[mapping.reference] if mapping.reference is not None else ""
+    free_text = " ".join(cells[mapping.text].split()) if mapping.text is not None else ""
     return NormalizedRecord(
         source_row=row_number,
         record_id=record_id,
@@ -167,4 +176,5 @@ def _normalize_row(
         counterparty=counterparty,
         occurred_on=parse_date(cells[mapping.date], mapping.date_format),
         amount=Money(minor, currency),
+        text=free_text or None,
     )

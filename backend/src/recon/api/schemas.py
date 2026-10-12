@@ -86,6 +86,7 @@ class RecordOut(BaseModel):
     occurred_on: date | None
     amount: Amount | None
     in_current_files: bool
+    text: str | None = None
 
 
 class CaseRow(BaseModel):

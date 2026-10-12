@@ -139,6 +139,7 @@ def register_file(
             "row_number": record.source_row,
             "record_id": record.record_id,
             "reference": record.reference,
+            "free_text": record.text,
             "counterparty": record.counterparty,
             "occurred_on": record.occurred_on,
             "amount_minor": record.amount.minor,
