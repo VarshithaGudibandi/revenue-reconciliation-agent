@@ -14,6 +14,7 @@ from recon.datagen.model import (
     Match,
     Payment,
 )
+from recon.datagen.text import add_text
 
 FIXABLE_KINDS = frozenset(
     {
@@ -244,13 +245,15 @@ def generate_dataset(config: Config) -> Dataset:
         flag(AnomalyKind.UNMATCHED_PAYMENT, (), (payment_id,), -amount, donor.currency)
 
     rng.shuffle(payments)
-    return Dataset(
-        revision=1,
-        seed=config.seed,
-        period=config.period,
-        invoices=tuple(invoices),
-        payments=tuple(payments),
-        truth=GroundTruth(matches=tuple(matches), anomalies=tuple(anomalies), resolved=()),
+    return add_text(
+        Dataset(
+            revision=1,
+            seed=config.seed,
+            period=config.period,
+            invoices=tuple(invoices),
+            payments=tuple(payments),
+            truth=GroundTruth(matches=tuple(matches), anomalies=tuple(anomalies), resolved=()),
+        )
     )
 
 

@@ -21,6 +21,7 @@ class Invoice:
     issue_date: date
     currency: str
     total_minor: int
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class Payment:
     received_on: date
     currency: str
     amount_minor: int
+    memo: str = ""
 
 
 @dataclass(frozen=True)
@@ -51,8 +53,10 @@ class Anomaly:
     computed without an exchange rate.
 
     For ``AMBIGUOUS_PAYMENT`` the invoices are every unpaid invoice the payment could
-    belong to, ``intended_invoice_id`` is the one it really belongs to, and the variance
-    is what stays unpaid however the payment is assigned.
+    belong to, ``intended_invoice_id`` is the one it really belongs to, the variance is what
+    stays unpaid however the payment is assigned, and ``memo_kind`` says whether the payer's
+    memo names the invoice (``explicit``), describes what it is for (``descriptive``) or
+    says nothing useful (``useless``).
     """
 
     anomaly_id: str
@@ -62,6 +66,7 @@ class Anomaly:
     variance_minor: int | None
     currency: str
     intended_invoice_id: str | None = None
+    memo_kind: str | None = None
 
 
 @dataclass(frozen=True)

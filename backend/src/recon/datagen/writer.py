@@ -30,6 +30,7 @@ def truth_to_dict(dataset: Dataset) -> dict[str, Any]:
                 "variance_minor": a.variance_minor,
                 "currency": a.currency,
                 "intended_invoice_id": a.intended_invoice_id,
+                "memo_kind": a.memo_kind,
             }
             for a in truth.anomalies
         ],

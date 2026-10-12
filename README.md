@@ -114,6 +114,8 @@ cd backend
 uv run python -m recon.datagen --out /tmp/recon-data --seed 42
 ```
 
+Every generated invoice has a short description (`Hosting Jan 2026`) and every payment a memo, in the generator's data but not yet in the exported files. The memo of an ambiguous payment, one that could belong to two or three look-alike invoices, is one of three kinds that the ground truth records: `explicit` (it names the intended invoice, written the way people write it), `descriptive` (it says what it is for, which only the intended invoice matches) or `useless`. Look-alike invoices always read differently. The text comes from its own random stream, so it changes none of the numbers, dates or ids; a test pins the hashes of the default exports.
+
 Real exports differ in header text, language, date format and number format, and they carry columns that look like the one you want. `--invoice-style` and `--payment-style` write the same data as one of several export styles, for example a German ERP export with `Bruttobetrag` and a decimal comma, a SAP-style export with `BELNR` and `BUDAT`, or a payment processor export with timestamps and a fee column next to the amount. Each run also writes `mapping_truth.json` with the correct column mapping, the lookalike columns that must not be mapped, and whether the date order can be told from the values at all. Two styles are held out, modelled on publicly described layouts of an accounting product and a payment processor (`xero_like`, `stripe_like`); I wrote them before the baseline mapper and don't tune against them. Their headers come from secondhand descriptions, not from an official export. A test writes every style, reads it back with its true mapping and checks that the records equal the generated ones.
 
 ```bash
