@@ -5,6 +5,7 @@ description = "Revenue reconciliation service"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.13",
+    "anthropic>=1.13.0",
     "fastapi>=0.115",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.4",

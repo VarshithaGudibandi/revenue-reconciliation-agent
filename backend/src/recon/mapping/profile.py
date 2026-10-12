@@ -89,30 +89,38 @@ class FileProfile:
     def headers(self) -> tuple[str, ...]:
         return tuple(c.header for c in self.columns)
 
-    def describe(self) -> dict[str, Any]:
-        """The profile as plain data, without any cell value.
+    def describe(self, *, samples: bool = False) -> dict[str, Any]:
+        """The profile as plain data. By default no cell value appears: shapes replace values,
+        so ``INV-000123`` is ``A+-9+``. This is what may be sent to a language model.
 
-        Shapes replace values: ``INV-000123`` becomes ``A+-9+``. This is what may be sent to
-        a language model.
+        With ``samples``, each column also gets up to three examples. Short all-capital codes
+        in a column with few distinct values (``EUR``, ``OPEN``) are shown as they are; every
+        other example is masked by ``mask_value``.
         """
-        return {
-            "file": self.name,
-            "rows": self.rows,
-            "columns": [
-                {
-                    "header": c.header,
-                    "position": c.position,
-                    "empty_share": round(c.empty_share, 3),
-                    "unique_share": round(c.unique_share, 3),
-                    "shapes": [{"shape": s, "count": n} for s, n in c.shapes],
-                    "date_formats": list(c.date_formats()),
-                    "amount_decimal_separators": list(c.amount_separators()),
-                    "share_with_fraction": round(c.fraction_share, 3),
-                    "share_currency_codes": round(c.currency_share, 3),
-                }
-                for c in self.columns
-            ],
-        }
+        columns = []
+        for c in self.columns:
+            entry: dict[str, Any] = {
+                "header": c.header,
+                "position": c.position,
+                "empty_share": round(c.empty_share, 3),
+                "unique_share": round(c.unique_share, 3),
+                "shapes": [{"shape": s, "count": n} for s, n in c.shapes],
+                "date_formats": list(c.date_formats()),
+                "amount_decimal_separators": list(c.amount_separators()),
+                "share_with_fraction": round(c.fraction_share, 3),
+                "share_currency_codes": round(c.currency_share, 3),
+            }
+            if samples:
+                distinct = list(dict.fromkeys(c.values))
+                if _is_label_column(c):
+                    entry["examples"] = {"kind": "codes", "values": sorted(distinct)}
+                else:
+                    entry["examples"] = {
+                        "kind": "masked",
+                        "values": [mask_value(v) for v in distinct[:3]],
+                    }
+            columns.append(entry)
+        return {"file": self.name, "rows": self.rows, "columns": columns}
 
 
 def shape_of(value: str) -> str:
@@ -122,6 +130,35 @@ def shape_of(value: str) -> str:
         for ch in value
     )
     return _RUN.sub(lambda m: m.group(1) + "+", masked)
+
+
+_TOKENS = re.compile(r"(\d+)|([^\W\d_]+)|(.)", re.DOTALL)
+LABEL_LIMIT = 8
+
+
+def mask_value(value: str) -> str:
+    """Hide most of a value but keep its form: digits become ``*`` after the first of each run,
+    and letters after the first of each run longer than three. ``INV-000123`` becomes
+    ``INV-0*****``, ``ACME-CORP`` becomes ``A***-C***`` and ``1500.00`` becomes ``1***.0*``.
+    Punctuation and separators stay, because they carry the format.
+    """
+    parts: list[str] = []
+    for digits, letters, other in _TOKENS.findall(value):
+        if digits:
+            parts.append(digits[0] + "*" * (len(digits) - 1))
+        elif letters:
+            parts.append(letters if len(letters) <= 3 else letters[0] + "*" * (len(letters) - 1))
+        else:
+            parts.append(other)
+    return "".join(parts)
+
+
+def _is_label_column(column: "ColumnProfile") -> bool:
+    """Short all-capital codes with few distinct values, such as a currency or a status."""
+    distinct = set(column.values)
+    return 0 < len(distinct) <= LABEL_LIMIT and all(
+        v.isascii() and v.isalpha() and v.isupper() and len(v) <= 6 for v in distinct
+    )
 
 
 def _plausible(moment: datetime) -> bool:

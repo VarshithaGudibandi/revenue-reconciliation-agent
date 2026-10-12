@@ -89,6 +89,16 @@ Files by outcome, 3 seeds of 120 invoices, full month and first-12-days variants
 
 No file in any group was confidently wrong, and no field was missed (a field is missed when the right answer is not among the options offered). Everything not exact is a question for the user. I wrote the generator, the styles and the baseline, so these numbers show how the baseline behaves on my data, not on real exports; the stress column is the part that says where header words run out.
 
+### Mapping with a language model
+
+`mapping/llm.py` asks Claude to map one file at a time and then checks the answer against the data. The model receives the role of the file (invoices or payments) and a description of each column: its header, the shapes of its values, the date formats and decimal separators its values read under, how unique it is, and up to three examples. Short all-capital codes in a column with few distinct values (`EUR`, `OPEN`) are shown as they are. Every other example is masked: digits after the first of each run and letters after the first of each run longer than three become `*`, so `INV-000123` is sent as `INV-0*****` and `1500.00` as `1***.0*`. Cell values are not sent in any other form. A test checks that none of the first rows of a generated export appears in the description.
+
+The answer is a structured output in which every column field can only be one of the file's own headers or `(none)`. The engine then downgrades any answer the data contradicts: a column whose values do not fit the field, a column used for two fields, a decimal separator the amounts do not read with, and a date order that the values leave open. A date order is never confident unless the values settle it, whatever the model says. `--mapper llm-unchecked` shows what the model says without these checks, so the effect of the checks can be measured.
+
+`python -m recon.evaluation.mapping_eval --mapper llm` runs the same evaluation as the baseline, with the model mapping each file on its own. It needs `ANTHROPIC_API_KEY`. `--record FILE` saves each answer to a file, and `--replay FILE` serves those answers without the network or a key, so the evaluation can be repeated by someone who cannot call the API; it cannot answer a question that was not recorded. The default model is `claude-opus-5-5` at low effort, with server-side refusal fallbacks switched on. Forced tool use is not available on that model, which is why the answer is a structured output. The command prints the number of calls, the tokens, and an estimated cost at list price.
+
+No answers are recorded in this repository yet, so there are no measured results for the model. The unit tests use a fake model, a stand-in for the API client and a recorded file written by the tests.
+
 ## Synthetic data
 
 The repository is public, so it only uses generated data. The generator writes an invoice export and a payment export with a known set of problems, a ground-truth file, and a second revision in which some of the problems are fixed at the source:

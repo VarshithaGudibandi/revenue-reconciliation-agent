@@ -10,9 +10,10 @@ A mapper built around the first group looks better on it than it should.
 import argparse
 import dataclasses
 import json
+import os
 import tempfile
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,11 +23,11 @@ from recon.datagen.writer import write_dataset
 from recon.evaluation.mapping_score import FILE_OUTCOMES, classify, score_file
 from recon.ingestion.normalize import ColumnMapping
 from recon.mapping.baseline import propose_file, propose_mapping
-from recon.mapping.profile import FileProfile, profile_csv_bytes
-from recon.mapping.proposal import FileProposal, MappingProposal
+from recon.mapping.llm import LlmMapper
+from recon.mapping.llm_client import AnthropicJson, JsonModel, RecordingJson, ReplayJson
+from recon.mapping.pairing import Mapper, each_file_alone
+from recon.mapping.profile import profile_csv_bytes
 
-Mapper = Callable[[FileProfile, FileProfile], MappingProposal]
-SingleFileMapper = Callable[[FileProfile, str], FileProposal]
 GROUPS = ("development", "held_out", "stress")
 VARIANTS = ("full_month", "first_12_days")
 
@@ -45,17 +46,6 @@ class CaseResult:
     @property
     def file_outcomes(self) -> tuple[str, str]:
         return classify(self.invoices), classify(self.payments)
-
-
-def each_file_alone(mapper: SingleFileMapper) -> Mapper:
-    """Use a one-file mapper as a mapper of two files, giving each no sight of the other."""
-
-    def paired(invoices: FileProfile, payments: FileProfile) -> MappingProposal:
-        return MappingProposal(
-            invoices=mapper(invoices, "invoices"), payments=mapper(payments, "payments")
-        )
-
-    return paired
 
 
 def run_case(
@@ -178,20 +168,75 @@ def format_report(results: Sequence[CaseResult]) -> str:
     return "\n".join(lines)
 
 
+# List prices in US dollars per million input and output tokens, from the Claude API reference
+# cached on 2026-10-06. An estimate for planning: check current pricing before relying on it.
+LIST_PRICES = {
+    "claude-opus-5-5": (4.00, 20.00),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-haiku-5-5": (0.10, 0.50),
+}
+
+
+def _llm_mapper(args: argparse.Namespace) -> LlmMapper:
+    client: JsonModel
+    if args.replay:
+        client = ReplayJson(Path(args.replay))
+        if not len(client):
+            raise SystemExit(f"{args.replay} holds no recorded answers")
+    else:
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise SystemExit(
+                "No ANTHROPIC_API_KEY is set and no --replay file was given, so there is "
+                "nothing to ask. Run with --mapper baseline, or replay recorded answers."
+            )
+        client = AnthropicJson(model=args.model, effort=args.effort)
+        if args.record:
+            client = RecordingJson(client, Path(args.record))
+    return LlmMapper(client, validate=args.mapper == "llm")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m recon.evaluation.mapping_eval")
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--invoices", type=int, default=120)
     parser.add_argument(
+        "--mapper",
+        choices=["baseline", "llm", "llm-unchecked"],
+        default="baseline",
+        help="llm-unchecked uses the model's answer without checking it against the data",
+    )
+    parser.add_argument(
         "--mode",
         choices=["paired", "single"],
         default="paired",
-        help="paired: the mapper sees both files; single: each file is mapped on its own",
+        help="baseline only. paired: the mapper sees both files; single: each file alone",
     )
+    parser.add_argument("--model", default="claude-opus-5-5")
+    parser.add_argument("--effort", default="low", choices=["low", "medium", "high"])
+    parser.add_argument("--replay", help="serve answers recorded in this file; no network")
+    parser.add_argument("--record", help="append the live answers to this file")
     args = parser.parse_args()
-    mapper = propose_mapping if args.mode == "paired" else each_file_alone(propose_file)
+
+    llm: LlmMapper | None = None
+    if args.mapper == "baseline":
+        mapper = propose_mapping if args.mode == "paired" else each_file_alone(propose_file)
+    else:
+        llm = _llm_mapper(args)
+        mapper = each_file_alone(llm.propose_file)
+
     results = run_evaluation(mapper, seeds=range(args.seeds), size=args.invoices)
     print(format_report(results))
+    if llm is not None:
+        print(f"\nmodel calls: {llm.calls}, errors: {len(llm.errors)}")
+        for message in llm.errors[:5]:
+            print(f"  {message}")
+        price = LIST_PRICES.get(args.model)
+        if price and llm.calls:
+            cost = llm.input_tokens / 1e6 * price[0] + llm.output_tokens / 1e6 * price[1]
+            print(
+                f"tokens: {llm.input_tokens} in, {llm.output_tokens} out; "
+                f"about ${cost:.2f} at list price for {args.model}"
+            )
 
 
 if __name__ == "__main__":
