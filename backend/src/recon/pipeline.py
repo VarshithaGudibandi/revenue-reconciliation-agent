@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,6 +14,32 @@ from recon.persistence.runs import RunSummary, get_or_create_run, run_reconcilia
 class PeriodOutcome:
     run: RunSummary
     cases: SyncSummary | None
+
+    def as_result(self) -> dict[str, Any]:
+        """The outcome as JSON, for a job to keep."""
+        run = self.run
+        cases = self.cases
+        return {
+            "run": {
+                "id": str(run.run_id),
+                "status": run.status,
+                "mode": run.mode,
+                "partitions_total": run.partitions_total,
+                "partitions_recomputed": run.partitions_recomputed,
+                "finished_at": None if run.finished_at is None else run.finished_at.isoformat(),
+            },
+            "cases": None
+            if cases is None
+            else {
+                "applied": cases.applied,
+                "opened": cases.opened,
+                "updated": cases.updated,
+                "reopened": cases.reopened,
+                "resolved": cases.resolved,
+                "withdrawn": cases.withdrawn,
+                "fix_not_verified": cases.fix_not_verified,
+            },
+        }
 
 
 def reconcile_period(

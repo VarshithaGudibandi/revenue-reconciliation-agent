@@ -22,6 +22,7 @@ from recon.config import Settings
 from recon.db import create_db_engine
 from recon.explanation.service import build_explainer
 from recon.ingestion.normalize import MappingError
+from recon.jobs.queue import UnknownJobError
 from recon.mapping.service import build_mapper
 from recon.persistence.case_actions import (
     CaseNotFoundError,
@@ -52,6 +53,7 @@ def register_error_handlers(app: FastAPI) -> None:
         return error_response(404, "not_found", str(error))
 
     for exception in (
+        UnknownJobError,
         CaseNotFoundError,
         UnknownProfileError,
         UnknownSourceError,

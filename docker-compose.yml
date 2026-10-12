@@ -46,10 +46,22 @@ services:
     environment:
       RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
       RECON_DEMO: "true"
+      RECON_JOBS: queue
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - app-data:/data
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "recon.worker"]
+    environment:
+      RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
     depends_on:
       seed:
         condition: service_completed_successfully

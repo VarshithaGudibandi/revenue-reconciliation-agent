@@ -5,13 +5,24 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from sqlalchemy.orm import Session, sessionmaker
 
 from recon.adjudication.service import AdjudicatorChoice
 from recon.api import queries
 from recon.api.explanations import ask_explainer
 from recon.api.idempotency import request_hash, run_once, validate_key
+from recon.api.jobs import dispatch_reconcile, get_job, job_out
 from recon.api.schemas import (
     AcceptBody,
     ActionBody,
@@ -21,20 +32,19 @@ from recon.api.schemas import (
     CasePage,
     DemoOut,
     ErrorBody,
+    JobOut,
     MatchPage,
     NoteBody,
     PeriodOut,
     PeriodSummary,
     ProfileOut,
-    RunOut,
     SuggestionOut,
-    SyncOut,
     ToolOut,
     UploadOut,
 )
 from recon.api.suggestions import ask_adjudicator
 from recon.config import Settings
-from recon.demo import DEMO_PERIOD, demo_state, load_corrected_export
+from recon.demo import DEMO_PERIOD, demo_state, register_corrected_export
 from recon.explanation.service import ExplainerChoice
 from recon.persistence.case_actions import (
     AcceptReason,
@@ -50,7 +60,6 @@ from recon.persistence.repository import (
     latest_file_versions,
     register_file,
 )
-from recon.pipeline import PeriodOutcome, reconcile_period
 from recon.profiles import RECONCILIATION_SOURCES
 
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -167,6 +176,14 @@ def capabilities(
         adjudicator=ToolOut(name=adjudicator.name, model=adjudicator.model),
         explainer=ToolOut(name=explainer.name, model=explainer.model),
     )
+
+
+@router.get("/jobs/{job_id}", response_model=JobOut)
+def read_job(job_id: uuid.UUID, sessions: Sessions) -> JobOut:
+    """Where queued work stands. ``run`` and ``cases`` are filled in once it has succeeded; a
+    failed job says why in ``last_error``."""
+    with sessions() as session:
+        return job_out(get_job(session, job_id))
 
 
 @router.post("/cases/{case_id}/suggestion", response_model=SuggestionOut)
@@ -291,32 +308,6 @@ def post_note(
     )  # fmt: skip
 
 
-def _outcome_out(outcome: PeriodOutcome) -> tuple[RunOut, SyncOut | None]:
-    run = outcome.run
-    cases = outcome.cases
-    return (
-        RunOut(
-            id=run.run_id,
-            status=run.status,
-            mode=run.mode,
-            partitions_total=run.partitions_total,
-            partitions_recomputed=run.partitions_recomputed,
-            finished_at=run.finished_at,
-        ),
-        None
-        if cases is None
-        else SyncOut(
-            applied=cases.applied,
-            opened=cases.opened,
-            updated=cases.updated,
-            reopened=cases.reopened,
-            resolved=cases.resolved,
-            withdrawn=cases.withdrawn,
-            fix_not_verified=cases.fix_not_verified,
-        ),
-    )
-
-
 def _save_upload(upload: UploadFile, destination: Path, limit_bytes: int) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     written = 0
@@ -333,13 +324,15 @@ def upload_file(
     profile_id: uuid.UUID,
     period: str,
     source: str,
+    response: Response,
     sessions: Sessions,
     settings: AppSettings,
     file: Annotated[UploadFile, File()],
 ) -> UploadOut:
     """Register a source file for a period and, once every source is present, reconcile it.
 
-    Reconciliation runs inside the request until a job queue takes it over.
+    Reconciliation runs inside the request, or, when the server uses a job queue, is queued:
+    the response is then 202 with the job to poll at ``/api/jobs/{id}``.
     """
     check_period(period)
     key = f"{profile_id}/{period}/{source}/{uuid.uuid4().hex}.csv"
@@ -365,12 +358,16 @@ def upload_file(
     if not created:
         destination.unlink(missing_ok=True)  # the same content is already stored
 
-    run_info: RunOut | None = None
-    sync_info: SyncOut | None = None
-    if complete:
-        run_info, sync_info = _outcome_out(reconcile_period(sessions, profile_id, period))
+    dispatched = dispatch_reconcile(sessions, settings, profile_id, period) if complete else None
+    if dispatched is not None and dispatched.job is not None:
+        response.status_code = 202
     return UploadOut(
-        file=file_info, created=created, reconciled=complete, run=run_info, cases=sync_info
+        file=file_info,
+        created=created,
+        reconciled=dispatched is not None and dispatched.job is None,
+        run=None if dispatched is None else dispatched.run,
+        cases=None if dispatched is None else dispatched.cases,
+        job=None if dispatched is None else dispatched.job,
     )
 
 
@@ -398,13 +395,22 @@ demo_router = APIRouter(prefix="/api/demo", responses=ERROR_RESPONSES)
 
 
 @demo_router.post("/load-corrected-export", response_model=UploadOut)
-def load_corrected(sessions: Sessions, settings: AppSettings) -> UploadOut:
+def load_corrected(response: Response, sessions: Sessions, settings: AppSettings) -> UploadOut:
     state = demo_state(sessions, settings.storage_dir)
     if state.profile_id is None:
         raise HTTPException(status_code=409, detail="the demo has not been seeded")
-    outcome = load_corrected_export(sessions, settings.storage_dir, state.profile_id)
+    register_corrected_export(sessions, settings.storage_dir, state.profile_id)
     with sessions() as session:
         version = latest_file_versions(session, state.profile_id, DEMO_PERIOD)["payments"]
         file_info = queries.file_out(version)
-    run_info, sync_info = _outcome_out(outcome)
-    return UploadOut(file=file_info, created=True, reconciled=True, run=run_info, cases=sync_info)
+    dispatched = dispatch_reconcile(sessions, settings, state.profile_id, DEMO_PERIOD)
+    if dispatched.job is not None:
+        response.status_code = 202
+    return UploadOut(
+        file=file_info,
+        created=True,
+        reconciled=dispatched.job is None,
+        run=dispatched.run,
+        cases=dispatched.cases,
+        job=dispatched.job,
+    )

@@ -244,12 +244,31 @@ class SyncOut(BaseModel):
     fix_not_verified: int
 
 
+class JobOut(BaseModel):
+    """Work handed to a worker. ``run`` and ``cases`` are set once it has succeeded."""
+
+    id: uuid.UUID
+    kind: str
+    status: Literal["queued", "running", "succeeded", "failed"]
+    attempts: int
+    max_attempts: int
+    last_error: str | None
+    created_at: datetime
+    finished_at: datetime | None
+    run: RunOut | None
+    cases: SyncOut | None
+
+
 class UploadOut(BaseModel):
+    """``reconciled`` is true when the run was done inside the request. With a job queue the
+    request returns ``job`` instead, with status 202, and ``run`` and ``cases`` come later."""
+
     file: FileOut
     created: bool
     reconciled: bool
     run: RunOut | None
     cases: SyncOut | None
+    job: JobOut | None = None
 
 
 class DemoOut(BaseModel):
@@ -365,3 +384,4 @@ class ConfirmOut(BaseModel):
     rejected: dict[str, int]
     run: RunOut | None
     cases: SyncOut | None
+    job: JobOut | None = None

@@ -111,10 +111,10 @@ def seed_demo(sessions: sessionmaker[Session], storage_dir: Path) -> uuid.UUID:
     return profile_id
 
 
-def load_corrected_export(
+def register_corrected_export(
     sessions: sessionmaker[Session], storage_dir: Path, profile_id: uuid.UUID
-) -> PeriodOutcome:
-    """Load the corrected payments export, as if the source system had been fixed."""
+) -> None:
+    """Store the corrected payments export as a new version of the payments file."""
     _, corrected_dir = demo_directories(storage_dir)
     if not (corrected_dir / "payments.csv").exists():
         _write_files(storage_dir)
@@ -127,6 +127,13 @@ def load_corrected_export(
             path=corrected_dir / "payments.csv",
             object_key="demo/corrected/payments.csv",
         )
+
+
+def load_corrected_export(
+    sessions: sessionmaker[Session], storage_dir: Path, profile_id: uuid.UUID
+) -> PeriodOutcome:
+    """Load the corrected payments export, as if the source system had been fixed."""
+    register_corrected_export(sessions, storage_dir, profile_id)
     return reconcile_period(sessions, profile_id, DEMO_PERIOD)
 
 

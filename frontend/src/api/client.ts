@@ -7,6 +7,7 @@ export type CaseDetail = Schemas["CaseDetailOut"];
 export type MatchRow = Schemas["MatchRow"];
 export type PeriodSummary = Schemas["PeriodSummary"];
 export type Upload = Schemas["UploadOut"];
+export type Job = Schemas["JobOut"];
 export type AcceptReason = Schemas["AcceptBody"]["reason"];
 export type Proposal = Schemas["ProposalOut"];
 export type FileProposal = Schemas["FileProposalOut"];
@@ -74,6 +75,41 @@ function post<T>(path: string, body: unknown, idempotencyKey?: string): Promise<
   return request<T>(path, { method: "POST", headers, body: JSON.stringify(body) });
 }
 
+/** How a queued reconciliation is waited for. Exported so a test can make it quick. */
+export const jobPolling = { intervalMs: 1000, timeoutMs: 10 * 60 * 1000 };
+
+async function untilDone(first: Job): Promise<Job> {
+  const deadline = Date.now() + jobPolling.timeoutMs;
+  let job = first;
+  while (job.status === "queued" || job.status === "running") {
+    if (Date.now() > deadline) {
+      throw new ApiError(0, "job_timeout", "Reconciliation is still running. Reload in a minute to see the result.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, jobPolling.intervalMs));
+    job = await request<Job>(`/api/jobs/${job.id}`);
+  }
+  if (job.status === "failed") {
+    throw new ApiError(0, "job_failed", `Reconciliation failed: ${job.last_error ?? "no reason was recorded"}`);
+  }
+  return job;
+}
+
+/** A server with a job queue answers 202 with a job instead of the result. Wait for the job and
+ * return what the caller would have got if the work had been done in the request. */
+async function settled<T extends { job?: Job | null; run: Job["run"]; cases: Job["cases"] }>(
+  result: T,
+): Promise<T> {
+  if (!result.job) return result;
+  const done = await untilDone(result.job);
+  return {
+    ...result,
+    ...("reconciled" in result ? { reconciled: true } : {}),
+    job: done,
+    run: done.run,
+    cases: done.cases,
+  };
+}
+
 export interface CaseQuery {
   status?: string[];
   kind?: string[];
@@ -114,7 +150,7 @@ export const api = {
     return request<Upload>(`${periodPath(profileId, period)}/files/${source}`, {
       method: "POST",
       body: form,
-    });
+    }).then(settled);
   },
   propose: (invoices: File, payments: File, period: string) => {
     const form = new FormData();
@@ -128,7 +164,7 @@ export const api = {
   confirmMapping: (
     proposalId: string,
     body: { name: string; invoices: MappingBody; payments: MappingBody },
-  ) => post<Confirmation>(`/api/setup/proposals/${proposalId}/confirm`, body),
+  ) => post<Confirmation>(`/api/setup/proposals/${proposalId}/confirm`, body).then(settled),
   capabilities: () => request<Capabilities>("/api/capabilities"),
   askForExplanation: (caseId: string) =>
     request<AskedExplanation>(`/api/cases/${caseId}/explanation`, { method: "POST" }),
@@ -136,5 +172,5 @@ export const api = {
     request<Suggestion>(`/api/cases/${caseId}/suggestion`, { method: "POST" }),
   demo: () => request<Schemas["DemoOut"]>("/api/demo"),
   loadCorrectedExport: () =>
-    request<Upload>("/api/demo/load-corrected-export", { method: "POST" }),
+    request<Upload>("/api/demo/load-corrected-export", { method: "POST" }).then(settled),
 };

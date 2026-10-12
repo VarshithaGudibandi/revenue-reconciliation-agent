@@ -599,6 +599,16 @@
             "title": "Created",
             "type": "boolean"
           },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "period": {
             "title": "Period",
             "type": "string"
@@ -972,6 +982,100 @@
           "needs_answer"
         ],
         "title": "FileProposalOut",
+        "type": "object"
+      },
+      "JobOut": {
+        "description": "Work handed to a worker. ``run`` and ``cases`` are set once it has succeeded.",
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "cases": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "attempts",
+          "max_attempts",
+          "last_error",
+          "created_at",
+          "finished_at",
+          "run",
+          "cases"
+        ],
+        "title": "JobOut",
         "type": "object"
       },
       "KindTotal": {
@@ -1837,6 +1941,7 @@
         "type": "object"
       },
       "UploadOut": {
+        "description": "``reconciled`` is true when the run was done inside the request. With a job queue the\nrequest returns ``job`` instead, with status 202, and ``run`` and ``cases`` come later.",
         "properties": {
           "cases": {
             "anyOf": [
@@ -1854,6 +1959,16 @@
           },
           "file": {
             "$ref": "#/components/schemas/FileOut"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reconciled": {
             "title": "Reconciled",
@@ -2756,6 +2871,77 @@
         "summary": "Load Corrected"
       }
     },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "description": "Where queued work stands. ``run`` and ``cases`` are filled in once it has succeeded; a\nfailed job says why in ``last_error``.",
+        "operationId": "read_job_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Read Job"
+      }
+    },
     "/api/profiles": {
       "get": {
         "operationId": "profiles_api_profiles_get",
@@ -3066,7 +3252,7 @@
     },
     "/api/profiles/{profile_id}/periods/{period}/files/{source}": {
       "post": {
-        "description": "Register a source file for a period and, once every source is present, reconcile it.\n\nReconciliation runs inside the request until a job queue takes it over.",
+        "description": "Register a source file for a period and, once every source is present, reconcile it.\n\nReconciliation runs inside the request, or, when the server uses a job queue, is queued:\nthe response is then 202 with the job to poll at ``/api/jobs/{id}``.",
         "operationId": "upload_file_api_profiles__profile_id__periods__period__files__source__post",
         "parameters": [
           {

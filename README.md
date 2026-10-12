@@ -13,9 +13,9 @@ Two principles shape the design:
 docker compose up --build
 ```
 
-This starts Postgres, runs the migrations, loads a demo month of generated invoices and payments, and serves the API and the dashboard at <http://127.0.0.1:8000>. The demo has 400 invoices, about one in ten of which does not reconcile. The "Load corrected export" button in the demo banner loads a second payments file in which some of the problems are fixed at the source, so I can watch cases close and the ones that were not fixed stay open.
+This starts Postgres, runs the migrations, loads a demo month of generated invoices and payments, serves the API and the dashboard at <http://127.0.0.1:8000>, and starts a worker that runs the reconciliations the API queues. The demo has 400 invoices, about one in ten of which does not reconcile. The "Load corrected export" button in the demo banner loads a second payments file in which some of the problems are fixed at the source, so I can watch cases close and the ones that were not fixed stay open.
 
-The demo endpoints and the banner exist only when `RECON_DEMO=true`, which the compose file sets.
+The demo endpoints and the banner exist only when `RECON_DEMO=true`, which the compose file sets. The compose file also sets `RECON_JOBS=queue`; without it, as in the checks below, the server reconciles inside the request.
 
 ### Backend checks
 
@@ -52,13 +52,28 @@ A profile holds the column mappings for each source file and the matching thresh
 
 When an earlier run exists with the same configuration, the new run compares the records of the two versions and matches again only the customers whose records changed, reusing the earlier result for the rest. Matching every customer again gives the same result.
 
+## Running reconciliations in a queue
+
+A reconciliation of a large period can take longer than a request should. With `RECON_JOBS=queue` the upload and the setup confirmation queue a `reconcile_period` job and return `202` with the job; `GET /api/jobs/{id}` shows it queued, running, succeeded (with the run and the case changes) or failed (with the reason). The dashboard waits for the job and then shows what it would have shown from the request. The default, `RECON_JOBS=inline`, runs the work in the request and needs no worker.
+
+The queue is a table in Postgres (`job`, `recon/jobs/queue.py`) and the worker is `python -m recon.worker`:
+
+- A worker claims one due job with `FOR UPDATE SKIP LOCKED`, so two workers never take the same one, and the claim counts as an attempt.
+- The claim sets a lease (`RECON_JOB_LEASE_SECONDS`, 60) that a second thread of the worker extends while the job runs, so a job can take longer than the lease. If the worker dies, the lease runs out and the next worker to look puts the job back, or fails it if it has used its attempts (`RECON_JOB_MAX_ATTEMPTS`, 5).
+- Only the holder of the lease can finish a job. A worker that was cut off for longer than the lease finds out when it finishes, and its result is dropped; the job belongs to whoever took it over.
+- A failed attempt waits before the next one: 5 seconds doubling to 5 minutes, with up to a fifth added at random. An error the handler marks permanent, such as a payload that cannot be read, fails at once.
+- Two requests to reconcile the same period while the first is still waiting are one job. A request made while a job runs queues another, because the running one may already have read its input, and the second does not start until the first has finished. The reconciliation itself is safe to run twice at the same time, so this ordering is for tidiness, not correctness.
+- The database refuses a job that makes no sense, for example one that is running with no lease or succeeded with no result.
+
+What is not covered: a handler cannot be cancelled, so a worker that lost its job still runs it to the end. Times come from the workers' clocks, so the lease has to be much longer than their clock error. There is one queue and no priorities. The wait for a result in the dashboard is a poll once a second.
+
 ## Cases
 
 Each exception becomes a case that is tracked across runs. A case follows a problem by the records it involves, so it keeps its notes and history while its amounts change. It closes by itself, as resolved, only when its records appear in a match in the data. I can report a fix, accept a variance with a reason and a note, reopen an accepted one, and add notes; I cannot mark a case resolved by hand. A reported fix is checked when new data arrives: if the problem is still there the case reopens with a flag. An accepted case comes back if the data behind it changes. Every transition is kept in an append-only log.
 
 ## API and dashboard
 
-The API is under `/api`: profiles and periods, a per-period summary, the list of matches, the list of cases with filters, sorting and paging, one case with its records, history and notes, and the case actions (report fix, retract fix, accept, reopen, add note). Files are uploaded with a multipart request per source; when every source of a period is present the upload runs the reconciliation and updates the cases. Case actions take the version of the case I was looking at and fail with a 409 `stale_case` if it has changed, and they accept an `Idempotency-Key` header so a retried request is applied once. Errors all have the shape `{"error": {"code", "message"}}`.
+The API is under `/api`: profiles and periods, a per-period summary, the list of matches, the list of cases with filters, sorting and paging, one case with its records, history and notes, and the case actions (report fix, retract fix, accept, reopen, add note). Files are uploaded with a multipart request per source; when every source of a period is present the upload reconciles the period and updates the cases, inside the request or, with a job queue, as a job (see "Running reconciliations in a queue"). Case actions take the version of the case I was looking at and fail with a 409 `stale_case` if it has changed, and they accept an `Idempotency-Key` header so a retried request is applied once. Errors all have the shape `{"error": {"code", "message"}}`.
 
 Setting up a reconciliation starts from two sample files. `POST /api/setup/proposals` takes an invoice file, a payment file and a period, profiles both, and returns the proposed mapping: for each field the column, whether the proposal is confident, the other columns that were possible, and the reasons; the same for the date format and the decimal separator; and how many fields still need an answer. `POST /api/setup/proposals/{id}/preview` shows how the files would be read with a mapping, with the first rows and the rows that were rejected. `POST /api/setup/proposals/{id}/confirm` takes the name and the final mapping, creates the profile, registers the two files for the period and reconciles it. A mapping that reads no records from a file is refused and nothing is created. Confirming again with the same name and mapping returns the profile that exists; confirming with a different one is a 409.
 
@@ -66,7 +81,7 @@ Who proposes the mapping is set by `RECON_MAPPER`. `auto` (the default) adds the
 
 `frontend/openapi.json` is the committed OpenAPI description. A backend test fails when it no longer matches the app, and the frontend types in `frontend/src/api/schema.ts` are generated from it (`npm run api:types`); CI fails if they are out of date.
 
-The dashboard shows the share of invoices that reconciled, what is at stake by problem type and currency, and two tabs: cases that need attention, and invoices that reconciled. Every chart has a table view. "New reconciliation" (shown on its own when none exists yet) opens the setup: choose an invoice file, a payment file and a month, and the screen shows the proposed mapping field by field with the evidence for it. A field the data settles is marked "Confident" and anything else "Needs your answer"; the date order and an amount column the rules cannot tell apart stay open until the user picks one, and the create button stays disabled until nothing is open. Below the mapping, a table shows the first rows of each file as they will be read with the current choices, with the rows that were rejected, so a wrong choice shows up before anything is saved. A banner says whether the suggestions came from the rules alone or from the rules and a model. Opening a case shows the records involved, an explanation, the history and notes. The explanations are written by rules from the records (`backend/src/recon/api/explain.py`); no language model is involved yet, and the interface says so.
+The dashboard shows the share of invoices that reconciled, what is at stake by problem type and currency, and two tabs: cases that need attention, and invoices that reconciled. Every chart has a table view. "New reconciliation" (shown on its own when none exists yet) opens the setup: choose an invoice file, a payment file and a month, and the screen shows the proposed mapping field by field with the evidence for it. A field the data settles is marked "Confident" and anything else "Needs your answer"; the date order and an amount column the rules cannot tell apart stay open until the user picks one, and the create button stays disabled until nothing is open. Below the mapping, a table shows the first rows of each file as they will be read with the current choices, with the rows that were rejected, so a wrong choice shows up before anything is saved. A banner says whether the suggestions came from the rules alone or from the rules and a model. Opening a case shows the records involved, an explanation, the history and notes. The explanation is written by rules from the records (`backend/src/recon/api/explain.py`) and says so. When a model is configured, "Explain with the model" adds a second, checked reading under it (see "Explaining a case with a model").
 
 ## Column mapping
 

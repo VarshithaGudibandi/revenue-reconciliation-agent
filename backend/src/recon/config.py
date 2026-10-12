@@ -25,3 +25,11 @@ class Settings(BaseSettings):
     llm_fallbacks: bool = True
     # Serve model answers recorded earlier instead of calling the API.
     llm_replay: Path | None = None
+    # Where reconciliation runs. "inline": inside the request that asked for it. "queue": a job
+    # is queued and a separate worker (python -m recon.worker) runs it.
+    jobs: Literal["inline", "queue"] = "inline"
+    job_max_attempts: int = 5
+    # How long a worker holds a job without a sign of life, and how often it gives one.
+    job_lease_seconds: float = 60.0
+    job_heartbeat_seconds: float = 15.0
+    job_poll_seconds: float = 1.0

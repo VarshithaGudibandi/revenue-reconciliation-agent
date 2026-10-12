@@ -495,3 +495,68 @@ class CaseExplanation(Base):
     next_steps: Mapped[list[str] | None] = mapped_column(JSONB)
     problems: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = created_at()
+
+
+class Job(Base):
+    """A unit of work for a worker: what to do, who holds it and until when, how it ended.
+
+    A queued job is claimed with ``FOR UPDATE SKIP LOCKED``; the claim sets a lease that the
+    worker extends while it works. A job whose lease runs out is queued again by the next worker
+    that looks, so a crashed worker loses nothing.
+    """
+
+    __tablename__ = "job"
+    __table_args__ = (
+        Index(
+            "uq_job_queued_per_key",
+            "kind",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=text("status = 'queued'"),
+        ),
+        Index(
+            "ix_job_claimable",
+            "run_after",
+            "created_at",
+            postgresql_where=text("status = 'queued'"),
+        ),
+        Index("ix_job_lease", "lease_expires_at", postgresql_where=text("status = 'running'")),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'succeeded', 'failed')", name="status_known"
+        ),
+        CheckConstraint(
+            "(status = 'running') = (locked_by IS NOT NULL AND lease_expires_at IS NOT NULL)",
+            name="lease_iff_running",
+        ),
+        CheckConstraint(
+            "(status IN ('succeeded', 'failed')) = (finished_at IS NOT NULL)",
+            name="finished_iff_done",
+        ),
+        CheckConstraint(
+            "(status = 'succeeded') = (result IS NOT NULL)", name="result_iff_succeeded"
+        ),
+        CheckConstraint("status <> 'failed' OR last_error IS NOT NULL", name="failed_has_error"),
+        CheckConstraint(
+            "attempts >= 0 AND max_attempts >= 1 AND attempts <= max_attempts",
+            name="attempts_in_range",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="5")
+    run_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    locked_by: Mapped[str | None] = mapped_column(Text)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = created_at()
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

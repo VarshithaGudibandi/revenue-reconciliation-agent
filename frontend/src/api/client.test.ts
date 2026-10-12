@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { api, ApiError } from "./client";
+import { api, ApiError, jobPolling } from "./client";
 import { mockApi } from "../test/helpers";
 
 describe("api client", () => {
@@ -46,5 +46,93 @@ describe("api client", () => {
 
     expect(calls[0]?.headers["Idempotency-Key"]).toBe("abc-123");
     expect(calls[0]?.body).toEqual({ expected_version: 4 });
+  });
+
+  describe("queued reconciliation", () => {
+    const run = { id: "r1", status: "succeeded", mode: "full", partitions_total: 1, partitions_recomputed: 1, finished_at: null };
+    const cases = { applied: true, opened: 3, updated: 0, reopened: 0, resolved: 0, withdrawn: 0, fix_not_verified: 0 };
+    const job = (status: string, extra: Record<string, unknown> = {}) => ({
+      id: "j1",
+      kind: "reconcile_period",
+      status,
+      attempts: 1,
+      max_attempts: 5,
+      last_error: null,
+      created_at: "2026-10-12T10:00:00Z",
+      finished_at: null,
+      run: null,
+      cases: null,
+      ...extra,
+    });
+    const file = { version_number: 2 };
+    const upload = (queued: unknown) => ({ file, created: true, reconciled: false, run: null, cases: null, job: queued });
+
+    it("waits for the job and returns the result the caller would have got", async () => {
+      jobPolling.intervalMs = 0;
+      const states = [job("running"), job("succeeded", { run, cases })];
+      const { calls } = mockApi({
+        "POST /api/demo/load-corrected-export": { status: 202, body: upload(job("queued")) },
+        "GET /api/jobs/j1": () => ({ body: states.shift() }),
+      });
+
+      const result = await api.loadCorrectedExport();
+
+      expect(calls.filter((c) => c.path === "/api/jobs/j1")).toHaveLength(2);
+      expect(result.cases).toMatchObject({ applied: true, opened: 3 });
+      expect(result.run?.status).toBe("succeeded");
+      expect(result.reconciled).toBe(true);
+    });
+
+    it("does not poll when the server did the work in the request", async () => {
+      const { calls } = mockApi({
+        "POST /api/demo/load-corrected-export": {
+          body: { file, created: true, reconciled: true, run, cases, job: null },
+        },
+      });
+
+      const result = await api.loadCorrectedExport();
+
+      expect(calls).toHaveLength(1);
+      expect(result.cases?.opened).toBe(3);
+    });
+
+    it("turns a failed job into an error that says why", async () => {
+      jobPolling.intervalMs = 0;
+      mockApi({
+        "POST /api/demo/load-corrected-export": { status: 202, body: upload(job("queued")) },
+        "GET /api/jobs/j1": { body: job("failed", { last_error: "ValueError: bad period" }) },
+      });
+
+      await expect(api.loadCorrectedExport()).rejects.toMatchObject({
+        code: "job_failed",
+        message: "Reconciliation failed: ValueError: bad period",
+      });
+    });
+
+    it("gives up waiting after the time allowed", async () => {
+      jobPolling.intervalMs = 0;
+      jobPolling.timeoutMs = -1;
+      mockApi({
+        "POST /api/demo/load-corrected-export": { status: 202, body: upload(job("queued")) },
+      });
+
+      await expect(api.loadCorrectedExport()).rejects.toMatchObject({ code: "job_timeout" });
+      jobPolling.timeoutMs = 10 * 60 * 1000;
+    });
+
+    it("waits on a confirmed setup too", async () => {
+      jobPolling.intervalMs = 0;
+      mockApi({
+        "POST /api/setup/proposals/p1/confirm": {
+          status: 202,
+          body: { profile: { id: "x", name: "n", reconciliation_type: "invoice_payment" }, period: "2026-01", created: true, records: {}, rejected: {}, run: null, cases: null, job: job("queued") },
+        },
+        "GET /api/jobs/j1": { body: job("succeeded", { run, cases }) },
+      });
+
+      const result = await api.confirmMapping("p1", { name: "n", invoices: {} as never, payments: {} as never });
+
+      expect(result.cases?.opened).toBe(3);
+    });
   });
 });

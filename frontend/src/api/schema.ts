@@ -212,6 +212,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Job
+         * @description Where queued work stands. ``run`` and ``cases`` are filled in once it has succeeded; a
+         *     failed job says why in ``last_error``.
+         */
+        get: operations["read_job_api_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/profiles": {
         parameters: {
             query?: never;
@@ -276,7 +297,8 @@ export interface paths {
          * Upload File
          * @description Register a source file for a period and, once every source is present, reconcile it.
          *
-         *     Reconciliation runs inside the request until a job queue takes it over.
+         *     Reconciliation runs inside the request, or, when the server uses a job queue, is queued:
+         *     the response is then 202 with the job to poll at ``/api/jobs/{id}``.
          */
         post: operations["upload_file_api_profiles__profile_id__periods__period__files__source__post"];
         delete?: never;
@@ -634,6 +656,7 @@ export interface components {
             cases: components["schemas"]["SyncOut"] | null;
             /** Created */
             created: boolean;
+            job?: components["schemas"]["JobOut"] | null;
             /** Period */
             period: string;
             profile: components["schemas"]["ProfileOut"];
@@ -765,6 +788,39 @@ export interface components {
              * @enum {string}
              */
             source: "invoices" | "payments";
+        };
+        /**
+         * JobOut
+         * @description Work handed to a worker. ``run`` and ``cases`` are set once it has succeeded.
+         */
+        JobOut: {
+            /** Attempts */
+            attempts: number;
+            cases: components["schemas"]["SyncOut"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Max Attempts */
+            max_attempts: number;
+            run: components["schemas"]["RunOut"] | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
         };
         /** KindTotal */
         KindTotal: {
@@ -1056,12 +1112,17 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** UploadOut */
+        /**
+         * UploadOut
+         * @description ``reconciled`` is true when the run was done inside the request. With a job queue the
+         *     request returns ``job`` instead, with status 202, and ``run`` and ``cases`` come later.
+         */
         UploadOut: {
             cases: components["schemas"]["SyncOut"] | null;
             /** Created */
             created: boolean;
             file: components["schemas"]["FileOut"];
+            job?: components["schemas"]["JobOut"] | null;
             /** Reconciled */
             reconciled: boolean;
             run: components["schemas"]["RunOut"] | null;
@@ -1697,6 +1758,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_job_api_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description The profile, period or case does not exist. */

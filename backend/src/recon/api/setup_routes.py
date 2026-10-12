@@ -5,13 +5,13 @@ import uuid
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 
+from recon.api.jobs import dispatch_reconcile
 from recon.api.routes import (
     ERROR_RESPONSES,
     AppSettings,
     Sessions,
-    _outcome_out,
     _save_upload,
 )
 from recon.api.schemas import (
@@ -42,7 +42,6 @@ from recon.persistence.setup import (
     create_proposal,
     get_proposal,
 )
-from recon.pipeline import reconcile_period
 
 router = APIRouter(prefix="/api/setup", responses=ERROR_RESPONSES)
 
@@ -229,7 +228,11 @@ def preview(
 
 @router.post("/proposals/{proposal_id}/confirm", response_model=ConfirmOut)
 def confirm(
-    proposal_id: uuid.UUID, body: ConfirmBody, sessions: Sessions, settings: AppSettings
+    proposal_id: uuid.UUID,
+    body: ConfirmBody,
+    response: Response,
+    sessions: Sessions,
+    settings: AppSettings,
 ) -> ConfirmOut:
     """Create the profile from the confirmed mapping, register the two sample files and
     reconcile the first period. Confirming the same proposal again with the same name and
@@ -248,14 +251,16 @@ def confirm(
             name=confirmation.profile.name,
             reconciliation_type=confirmation.profile.reconciliation_type,
         )
-    outcome = reconcile_period(sessions, profile_out.id, confirmation.period)
-    run, cases = _outcome_out(outcome)
+    dispatched = dispatch_reconcile(sessions, settings, profile_out.id, confirmation.period)
+    if dispatched.job is not None:
+        response.status_code = 202
     return ConfirmOut(
         profile=profile_out,
         period=confirmation.period,
         created=confirmation.created,
         records=confirmation.records,
         rejected=confirmation.rejected,
-        run=run,
-        cases=cases,
+        run=dispatched.run,
+        cases=dispatched.cases,
+        job=dispatched.job,
     )
