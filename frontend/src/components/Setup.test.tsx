@@ -212,4 +212,49 @@ describe("Setup", () => {
     renderWithClient(<Setup firstTime={false} onDone={() => {}} onCancel={() => {}} />);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
+
+  it("reads deposits and payouts when that is what is chosen, in their words, with the rules only", async () => {
+    const { calls } = routes({
+      "POST /api/setup/proposals": {
+        body: proposalFixture({
+          labels: {
+            type: "payout_deposit",
+            title: "Bank deposits and processor payouts",
+            left: "Deposit",
+            left_plural: "deposits",
+            right: "Payout",
+            right_plural: "payouts",
+          },
+        }),
+      },
+    });
+    renderWithClient(<Setup firstTime onDone={() => {}} onCancel={() => {}} />);
+
+    await userEvent.selectOptions(screen.getByLabelText("What to reconcile"), "payout_deposit");
+    expect(screen.getByText(/no language model is used for this type/)).toBeInTheDocument();
+    await userEvent.upload(
+      screen.getByLabelText("Deposit export (CSV)"),
+      new File(["a,b\n1,2\n"], "deposits.csv", { type: "text/csv" }),
+    );
+    await userEvent.upload(
+      screen.getByLabelText("Payout export (CSV)"),
+      new File(["a,b\n1,2\n"], "payouts.csv", { type: "text/csv" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Read the files" }));
+
+    expect(await screen.findByText("Deposit file")).toBeInTheDocument();
+    expect(screen.getByText("Payout file")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name of this reconciliation")).toHaveValue("Bank deposits and processor payouts");
+    expect((calls[0]!.body as FormData).get("type")).toBe("payout_deposit");
+    expect(screen.getByText("Bank transaction id")).toBeInTheDocument();
+    expect(screen.getByText("Deposit reference")).toBeInTheDocument();
+  });
+
+  it("asks for invoices and payments by default", async () => {
+    routes();
+    renderWithClient(<Setup firstTime onDone={() => {}} onCancel={() => {}} />);
+
+    expect(screen.getByLabelText("What to reconcile")).toHaveValue("invoice_payment");
+    expect(screen.queryByText(/no language model is used for this type/)).not.toBeInTheDocument();
+  });
 });

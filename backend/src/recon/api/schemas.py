@@ -335,7 +335,11 @@ class FileProposalOut(BaseModel):
 
 
 class ProposalOut(BaseModel):
+    """``invoices`` is the first file and ``payments`` the second, whatever the type; ``labels``
+    says what they are (deposits and payouts, for instance)."""
+
     id: uuid.UUID
+    labels: TypeLabels
     period: str
     status: Literal["proposed", "confirmed"]
     mapper: str

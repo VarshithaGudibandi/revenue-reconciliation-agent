@@ -434,7 +434,9 @@ export interface paths {
          * Propose
          * @description Read two sample files and propose how their columns map to the fields we need.
          *
-         *     Nothing is configured yet: the proposal is kept until it is confirmed.
+         *     ``invoices`` is the first file and ``payments`` the second whatever the type: for
+         *     ``payout_deposit`` they are the deposits and the payouts. Only the rules propose a mapping
+         *     for that type. Nothing is configured yet: the proposal is kept until it is confirmed.
          */
         post: operations["propose_api_setup_proposals_post"];
         delete?: never;
@@ -598,6 +600,11 @@ export interface components {
             payments: string;
             /** Period */
             period: string;
+            /**
+             * Type
+             * @default invoice_payment
+             */
+            type: string;
         };
         /** Body_upload_file_api_profiles__profile_id__periods__period__files__source__post */
         Body_upload_file_api_profiles__profile_id__periods__period__files__source__post: {
@@ -1182,7 +1189,11 @@ export interface components {
             /** Reconciliation Type */
             reconciliation_type: string;
         };
-        /** ProposalOut */
+        /**
+         * ProposalOut
+         * @description ``invoices`` is the first file and ``payments`` the second, whatever the type; ``labels``
+         *     says what they are (deposits and payouts, for instance).
+         */
         ProposalOut: {
             /** Date Formats */
             date_formats: string[];
@@ -1192,6 +1203,7 @@ export interface components {
              */
             id: string;
             invoices: components["schemas"]["FileProposalOut"];
+            labels: components["schemas"]["TypeLabels"];
             /** Mapper */
             mapper: string;
             /** Model */

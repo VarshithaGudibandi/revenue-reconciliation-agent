@@ -424,6 +424,11 @@ class MappingProposalRow(Base):
     period: Mapped[str] = mapped_column(String(7), nullable=False)
     mapper: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[str | None] = mapped_column(Text)
+    # The first file is kept in the invoices slot and the second in the payments slot, whatever
+    # the type: the left side of the reconciliation and the right side.
+    reconciliation_type: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'invoice_payment'")
+    )
     invoices_key: Mapped[str] = mapped_column(Text, nullable=False)
     payments_key: Mapped[str] = mapped_column(Text, nullable=False)
     invoices_name: Mapped[str] = mapped_column(Text, nullable=False)

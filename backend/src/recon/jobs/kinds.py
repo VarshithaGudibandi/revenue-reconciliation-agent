@@ -13,6 +13,7 @@ RECONCILE_PERIOD = "reconcile_period"
 SCAN_BUCKET = "scan_bucket"
 SEND_ALERTS = "send_alerts"
 SEND_DIGEST = "send_digest"
+PURGE_OLD = "purge_old"
 
 
 def reconcile_key(profile_id: uuid.UUID, period: str) -> str:

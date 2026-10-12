@@ -157,8 +157,9 @@ export const api = {
       body: form,
     }).then(settled);
   },
-  propose: (invoices: File, payments: File, period: string) => {
+  propose: (invoices: File, payments: File, period: string, type = "invoice_payment") => {
     const form = new FormData();
+    form.append("type", type);
     form.append("invoices", invoices);
     form.append("payments", payments);
     form.append("period", period);

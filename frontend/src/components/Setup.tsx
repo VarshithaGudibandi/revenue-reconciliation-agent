@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Confirmation, FilePreview, Proposal } from "../api/client";
 import { useConfirm, usePreview, usePropose } from "../api/hooks";
 import { formatDate } from "../lib/formatters";
+import { INVOICE_LABELS, LabelsProvider, TYPE_CHOICES, useTypeLabels } from "../lib/typeLabels";
 import { AlertIcon, CheckCircleIcon } from "./Icons";
 import {
   MappingCard,
@@ -45,7 +46,9 @@ export function Setup({
         ) : null}
       </div>
       {proposal ? (
-        <Review key={proposal.id} proposal={proposal} onDone={onDone} />
+        <LabelsProvider value={proposal.labels}>
+          <Review key={proposal.id} proposal={proposal} onDone={onDone} />
+        </LabelsProvider>
       ) : (
         <Start onProposed={setProposal} />
       )}
@@ -57,6 +60,8 @@ function Start({ onProposed }: { onProposed: (proposal: Proposal) => void }) {
   const [invoices, setInvoices] = useState<File | null>(null);
   const [payments, setPayments] = useState<File | null>(null);
   const [period, setPeriod] = useState(previousMonth);
+  const [type, setType] = useState(INVOICE_LABELS.type);
+  const labels = TYPE_CHOICES.find((t) => t.type === type) ?? INVOICE_LABELS;
   const propose = usePropose();
   return (
     <form
@@ -64,19 +69,32 @@ function Start({ onProposed }: { onProposed: (proposal: Proposal) => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (invoices && payments)
-          propose.mutate({ invoices, payments, period }, { onSuccess: onProposed });
+          propose.mutate({ invoices, payments, period, type }, { onSuccess: onProposed });
       }}
     >
+      <label className="field">
+        <span>What to reconcile</span>
+        <select className="select" value={type} onChange={(e) => setType(e.target.value)}>
+          {TYPE_CHOICES.map((t) => (
+            <option key={t.type} value={t.type}>
+              {t.title}
+            </option>
+          ))}
+        </select>
+      </label>
       <p className="secondary">
-        Upload one invoice export and one payment export for the same month. Nothing is saved until you
-        confirm how their columns should be read.
+        Upload one {labels.left.toLowerCase()} export and one {labels.right.toLowerCase()} export for the
+        same month. Nothing is saved until you confirm how their columns should be read.
+        {labels.type === "payout_deposit"
+          ? " Only the rules read these files; no language model is used for this type."
+          : ""}
       </p>
       <label className="field">
-        <span>Invoice export (CSV)</span>
+        <span>{labels.left} export (CSV)</span>
         <input type="file" accept=".csv,text/csv" onChange={(e) => setInvoices(e.target.files?.[0] ?? null)} />
       </label>
       <label className="field">
-        <span>Payment export (CSV)</span>
+        <span>{labels.right} export (CSV)</span>
         <input type="file" accept=".csv,text/csv" onChange={(e) => setPayments(e.target.files?.[0] ?? null)} />
       </label>
       <label className="field">
@@ -105,7 +123,7 @@ function Review({ proposal, onDone }: { proposal: Proposal; onDone: (result: Con
   const [answered, setAnswered] = useState<Set<string>>(
     () => new Set([...initialAnswered("invoices", proposal.invoices), ...initialAnswered("payments", proposal.payments)]),
   );
-  const [name, setName] = useState("Invoices and payments");
+  const [name, setName] = useState(proposal.labels.title);
   const confirm = useConfirm(proposal.id);
 
   const change = (source: Source, key: MappingKey, value: string) => {
@@ -218,7 +236,8 @@ function PreviewPanel({
 }
 
 function PreviewTable({ source, preview }: { source: Source; preview: FilePreview }) {
-  const title = source === "invoices" ? "Invoice file" : "Payment file";
+  const labels = useTypeLabels();
+  const title = `${source === "invoices" ? labels.left : labels.right} file`;
   if (preview.error)
     return (
       <div className="notice notice-critical" role="alert">

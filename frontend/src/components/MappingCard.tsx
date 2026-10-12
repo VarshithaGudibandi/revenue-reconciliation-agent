@@ -1,5 +1,6 @@
 import type { ColumnChoice, FileProposal } from "../api/client";
-import { DECIMAL_LABELS, FIELD_HINTS, FIELD_LABELS, describeDateFormat } from "../lib/labels";
+import { DECIMAL_LABELS, describeDateFormat } from "../lib/labels";
+import { fieldHints, fieldLabels, useTypeLabels } from "../lib/typeLabels";
 import { AlertIcon, CheckCircleIcon } from "./Icons";
 
 export type Source = "invoices" | "payments";
@@ -158,7 +159,9 @@ interface CardProps {
 }
 
 export function MappingCard({ source, proposal, dateFormats, mapping, answered, onChange, onAccept }: CardProps) {
-  const title = source === "invoices" ? "Invoice file" : "Payment file";
+  const labels = useTypeLabels();
+  const hints = fieldHints(labels);
+  const title = `${source === "invoices" ? labels.left : labels.right} file`;
   const fields = proposal.fields as ColumnChoice[];
   const choice = (key: string) => fields.find((f) => f.field === key);
 
@@ -195,8 +198,8 @@ export function MappingCard({ source, proposal, dateFormats, mapping, answered, 
               <Row
                 key={f.field}
                 id={`${source}-${f.field}`}
-                label={FIELD_LABELS[source][f.field] ?? f.field}
-                hint={FIELD_HINTS[f.field]}
+                label={fieldLabels(labels)[source][f.field] ?? f.field}
+                hint={hints[f.field]}
                 value={mapping[key]}
                 options={columnOptions(key)}
                 settled={f.confident}

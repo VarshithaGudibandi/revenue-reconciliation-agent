@@ -152,6 +152,11 @@
           "period": {
             "title": "Period",
             "type": "string"
+          },
+          "type": {
+            "default": "invoice_payment",
+            "title": "Type",
+            "type": "string"
           }
         },
         "required": [
@@ -1803,6 +1808,7 @@
         "type": "object"
       },
       "ProposalOut": {
+        "description": "``invoices`` is the first file and ``payments`` the second, whatever the type; ``labels``\nsays what they are (deposits and payouts, for instance).",
         "properties": {
           "date_formats": {
             "items": {
@@ -1818,6 +1824,9 @@
           },
           "invoices": {
             "$ref": "#/components/schemas/FileProposalOut"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/TypeLabels"
           },
           "mapper": {
             "title": "Mapper",
@@ -1864,6 +1873,7 @@
         },
         "required": [
           "id",
+          "labels",
           "period",
           "status",
           "mapper",
@@ -4274,7 +4284,7 @@
     },
     "/api/setup/proposals": {
       "post": {
-        "description": "Read two sample files and propose how their columns map to the fields we need.\n\nNothing is configured yet: the proposal is kept until it is confirmed.",
+        "description": "Read two sample files and propose how their columns map to the fields we need.\n\n``invoices`` is the first file and ``payments`` the second whatever the type: for\n``payout_deposit`` they are the deposits and the payouts. Only the rules propose a mapping\nfor that type. Nothing is configured yet: the proposal is kept until it is confirmed.",
         "operationId": "propose_api_setup_proposals_post",
         "requestBody": {
           "content": {

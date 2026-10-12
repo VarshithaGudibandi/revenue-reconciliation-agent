@@ -11,7 +11,7 @@ from recon.config import Settings
 from recon.db import create_db_engine
 from recon.ingest.store import S3Store
 from recon.jobs.handlers import handlers_for
-from recon.jobs.kinds import SCAN_BUCKET, SEND_DIGEST
+from recon.jobs.kinds import PURGE_OLD, SCAN_BUCKET, SEND_DIGEST
 from recon.jobs.worker import Periodic, Worker
 
 
@@ -23,6 +23,7 @@ def main() -> None:
     store = None
     periodic: list[Periodic] = [
         Periodic(SEND_DIGEST, "digest", {}, timedelta(minutes=10)),
+        Periodic(PURGE_OLD, "purge", {}, timedelta(hours=6)),
     ]
     if settings.s3_bucket:
         store = S3Store(

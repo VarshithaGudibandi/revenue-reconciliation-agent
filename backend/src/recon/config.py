@@ -56,3 +56,8 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_starttls: bool = True
     smtp_from: str = "reconciliation@localhost"
+    # How long finished things are kept before the worker deletes them.
+    retention_jobs_days: int = 14
+    retention_proposals_days: int = 7
+    retention_idempotency_days: int = 7
+    retention_deliveries_days: int = 90

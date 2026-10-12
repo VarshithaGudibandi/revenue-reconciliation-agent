@@ -121,7 +121,9 @@ The search is bounded: at most 30 candidate payouts per deposit (the nearest in 
 
 The demo has a second profile, "Demo: payouts and deposits", seeded by `python -m recon.demo`.
 
-Not covered: there is no setup screen for this type yet, so a profile of it is made by code (the demo and the tests do); the language-model stages and the adjudication of ambiguous payments are for invoices and payments only; and a payout's reference is expected to hold one deposit id, so a bank memo that lists several payout ids is not read.
+The setup screen has a choice of what to reconcile. For deposits and payouts the first file is the deposits and the second the payouts, and only the rules propose the mapping (`POST /api/setup/proposals` takes a `type`, and its `invoices` and `payments` parts are the first and second file whatever the type). `tests/test_setup_deposits.py` runs that flow.
+
+Not covered: the language-model stages and the adjudication of ambiguous payments are for invoices and payments only; the mapping rules were checked on one layout of deposit and payout exports, not on styles I did not write; and a payout's reference is expected to hold one deposit id, so a bank memo that lists several payout ids is not read.
 
 ## Cases
 
@@ -224,6 +226,21 @@ Real exports differ in header text, language, date format and number format, and
 ```bash
 uv run python -m recon.datagen --out /tmp/recon-data --invoice-style german --payment-style processor
 ```
+
+## Retention
+
+The worker deletes what is finished with every six hours (`recon/retention.py`): succeeded and failed jobs after 14 days, mapping proposals that were never confirmed (with their sample files) after 7, idempotency records after 7, and alert deliveries after 90 (`RECON_RETENTION_JOBS_DAYS`, `RECON_RETENTION_PROPOSALS_DAYS`, `RECON_RETENTION_IDEMPOTENCY_DAYS`, `RECON_RETENTION_DELIVERIES_DAYS`). A request repeated with an idempotency key older than that is applied again. Reconciliation results, cases, file versions and the log of ingested objects are history and are not deleted.
+
+## Design
+
+`docs/architecture.md` is a one-page overview, and the decisions that cost something are in `docs/adr`. They include one for something I built, measured and removed (0006).
+
+## Future work
+
+- Run the language-model stages against the live API and record the answers, so that the mapping, adjudication and explanation tables have measured model results; today they have only the rules' results.
+- A setup path for the model stages on deposits and payouts, and a reader for a bank memo that lists several payout ids.
+- Per-field editing of an alert channel, and encryption of webhook URLs at rest.
+- Real exports, in place of generated ones, to see whether the baseline and the grouping window hold.
 
 ## License
 

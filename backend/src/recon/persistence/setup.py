@@ -16,7 +16,7 @@ from recon.ingestion.normalize import ColumnMapping, normalize_csv
 from recon.mapping.proposal import MappingProposal
 from recon.persistence.models import MappingProposalRow, Profile
 from recon.persistence.repository import create_profile, register_file
-from recon.profiles import ProfileConfig
+from recon.profiles import ProfileConfig, reconciliation_type
 
 
 class UnknownProposalError(LookupError):
@@ -49,8 +49,10 @@ def create_proposal(
     keys: dict[str, str],
     names: dict[str, str],
     proposal: MappingProposal,
+    reconciliation_type: str = "invoice_payment",
 ) -> MappingProposalRow:
     row = MappingProposalRow(
+        reconciliation_type=reconciliation_type,
         period=period,
         mapper=mapper,
         model=model,
@@ -101,26 +103,33 @@ def confirm_proposal(
     keys = {"invoices": row.invoices_key, "payments": row.payments_key}
     records: dict[str, int] = {}
     rejected: dict[str, int] = {}
-    for source, mapping in mappings.items():
-        result = normalize_csv(storage_dir / keys[source], mapping)
+    kind = reconciliation_type(row.reconciliation_type)
+    source_of = {"invoices": kind.left, "payments": kind.right}
+    for slot, mapping in mappings.items():
+        result = normalize_csv(storage_dir / keys[slot], mapping)
         if not result.records:
-            raise UnusableMappingError(f"the {source} mapping reads no records from the file")
-        records[source], rejected[source] = len(result.records), len(result.rejected)
+            raise UnusableMappingError(
+                f"the {source_of[slot]} mapping reads no records from the file"
+            )
+        records[source_of[slot]], rejected[source_of[slot]] = (
+            len(result.records),
+            len(result.rejected),
+        )
 
     profile = create_profile(
         session,
         name=name,
-        reconciliation_type="invoice_payment",
-        config=ProfileConfig(sources=mappings),
+        reconciliation_type=kind.key,
+        config=ProfileConfig(sources={source_of[slot]: m for slot, m in mappings.items()}),
     )
-    for source in ("invoices", "payments"):
+    for slot in ("invoices", "payments"):
         register_file(
             session,
             profile_id=profile.id,
-            source_name=source,
+            source_name=source_of[slot],
             period=row.period,
-            path=storage_dir / keys[source],
-            object_key=keys[source],
+            path=storage_dir / keys[slot],
+            object_key=keys[slot],
         )
     row.status = "confirmed"
     row.profile_id = profile.id

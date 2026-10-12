@@ -12,10 +12,11 @@ from recon.config import Settings
 from recon.ingest.scan import scan_bucket
 from recon.ingest.store import ObjectStore
 from recon.jobs import queue
-from recon.jobs.kinds import RECONCILE_PERIOD, SCAN_BUCKET, SEND_ALERTS, SEND_DIGEST
+from recon.jobs.kinds import PURGE_OLD, RECONCILE_PERIOD, SCAN_BUCKET, SEND_ALERTS, SEND_DIGEST
 from recon.jobs.worker import Handler, Permanent, Retry
 from recon.persistence.repository import check_period
 from recon.pipeline import reconcile_period
+from recon.retention import purge
 
 log = logging.getLogger("recon.worker")
 
@@ -92,6 +93,13 @@ def handle_digest(sessions: sessionmaker[Session], settings: Settings) -> Handle
     return handle
 
 
+def handle_purge(sessions: sessionmaker[Session], settings: Settings) -> Handler:
+    def handle(payload: dict[str, Any]) -> dict[str, Any]:
+        return dict(purge(sessions, settings.storage_dir, settings, now=datetime.now(UTC)))
+
+    return handle
+
+
 def handlers_for(
     sessions: sessionmaker[Session],
     store: ObjectStore | None = None,
@@ -101,6 +109,7 @@ def handlers_for(
     if settings is not None:
         handlers[SEND_ALERTS] = handle_alerts(sessions, settings)
         handlers[SEND_DIGEST] = handle_digest(sessions, settings)
+        handlers[PURGE_OLD] = handle_purge(sessions, settings)
         if store is not None:
             handlers[SCAN_BUCKET] = handle_scan(sessions, store, settings)
     return handlers

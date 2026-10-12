@@ -87,6 +87,14 @@ function choice(field: string, column: string | null, confident: boolean, extra:
 export function proposalFixture(overrides: Record<string, unknown> = {}) {
   return {
     id: "proposal-1",
+    labels: {
+      type: "invoice_payment",
+      title: "Invoices and payments",
+      left: "Invoice",
+      left_plural: "invoices",
+      right: "Payment",
+      right_plural: "payments",
+    },
     period: "2026-01",
     status: "proposed",
     mapper: "rules",

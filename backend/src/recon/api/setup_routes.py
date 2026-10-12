@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 
 from recon.api.jobs import dispatch_reconcile
+from recon.api.queries import type_labels
 from recon.api.routes import (
     ERROR_RESPONSES,
     AppSettings,
@@ -32,6 +33,7 @@ from recon.api.schemas import (
 )
 from recon.config import Settings
 from recon.ingestion.normalize import ColumnMapping, MappingError, normalize_csv
+from recon.mapping.baseline import propose_mapping
 from recon.mapping.profile import DATE_FORMATS, FileProfile, profile_csv_bytes
 from recon.mapping.proposal import FIELDS, FileProposal, MappingProposal
 from recon.mapping.service import MapperChoice
@@ -42,6 +44,7 @@ from recon.persistence.setup import (
     create_proposal,
     get_proposal,
 )
+from recon.profiles import reconciliation_type
 
 router = APIRouter(prefix="/api/setup", responses=ERROR_RESPONSES)
 
@@ -104,6 +107,7 @@ def _proposal_out(row: MappingProposalRow, settings: Settings) -> ProposalOut:
     stored = MappingProposal.model_validate(row.proposal)
     return ProposalOut(
         id=row.id,
+        labels=type_labels(row.reconciliation_type),
         period=row.period,
         status=row.status,
         mapper=row.mapper,
@@ -127,12 +131,16 @@ def propose(
     invoices: Annotated[UploadFile, File()],
     payments: Annotated[UploadFile, File()],
     period: Annotated[str, Form()],
+    type: Annotated[str, Form()] = "invoice_payment",  # noqa: A002
 ) -> ProposalOut:
     """Read two sample files and propose how their columns map to the fields we need.
 
-    Nothing is configured yet: the proposal is kept until it is confirmed.
+    ``invoices`` is the first file and ``payments`` the second whatever the type: for
+    ``payout_deposit`` they are the deposits and the payouts. Only the rules propose a mapping
+    for that type. Nothing is configured yet: the proposal is kept until it is confirmed.
     """
     check_period(period)
+    kind = reconciliation_type(type)
     folder = f"proposals/{uuid.uuid4().hex}"
     keys = {"invoices": f"{folder}/invoices.csv", "payments": f"{folder}/payments.csv"}
     uploads = {"invoices": invoices, "payments": payments}
@@ -144,13 +152,19 @@ def propose(
                 settings.max_upload_mb * 1024 * 1024,
             )
         profiles = {s: _profile_of(settings, keys[s]) for s in SOURCES}
-        proposal = mapper.propose(profiles["invoices"], profiles["payments"])
+        if kind.key == "invoice_payment":
+            proposal = mapper.propose(profiles["invoices"], profiles["payments"])
+            used = mapper
+        else:
+            proposal = propose_mapping(profiles["invoices"], profiles["payments"])
+            used = MapperChoice("rules", None, propose_mapping)
         with sessions.begin() as session:
             row = create_proposal(
                 session,
+                reconciliation_type=kind.key,
                 period=period,
-                mapper=mapper.name,
-                model=mapper.model,
+                mapper=used.name,
+                model=used.model,
                 keys=keys,
                 names={s: Path(uploads[s].filename or f"{s}.csv").name for s in SOURCES},
                 proposal=proposal,

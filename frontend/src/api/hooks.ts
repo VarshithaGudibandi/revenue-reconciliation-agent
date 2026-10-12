@@ -86,8 +86,8 @@ export function useCaseAction(caseId: string) {
 
 export function usePropose() {
   return useMutation({
-    mutationFn: (files: { invoices: File; payments: File; period: string }) =>
-      api.propose(files.invoices, files.payments, files.period),
+    mutationFn: (files: { invoices: File; payments: File; period: string; type: string }) =>
+      api.propose(files.invoices, files.payments, files.period, files.type),
   });
 }
 
