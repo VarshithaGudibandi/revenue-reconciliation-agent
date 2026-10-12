@@ -517,3 +517,22 @@ def test_resolving_edits_in_the_source_show_up_through_the_api(api: Api, tmp_pat
     after = api.client.get(f"/api/cases/{row['id']}").json()
     assert after["status"] == "resolved" and after["resolved_at"]
     assert [e["kind"] for e in after["events"]] == ["opened", "fix_reported", "resolved"]
+
+
+def test_the_committed_api_description_is_current() -> None:
+    """The frontend's types are generated from frontend/openapi.json; it must match the code."""
+    import json
+    import subprocess
+    import sys
+
+    backend = Path(__file__).resolve().parents[1]
+    committed = (backend.parent / "frontend" / "openapi.json").read_text()
+
+    generated = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "recon.api.openapi"],
+        check=True, capture_output=True, text=True, cwd=backend,
+    ).stdout  # fmt: skip
+
+    assert json.loads(committed) == json.loads(generated), (
+        "run: cd backend && uv run python -m recon.api.openapi > ../frontend/openapi.json"
+    )

@@ -40,8 +40,22 @@ def demo_directories(storage_dir: Path) -> tuple[Path, Path]:
 
 def _write_files(storage_dir: Path) -> tuple[Path, Path]:
     first_dir, corrected_dir = demo_directories(storage_dir)
+    # Real reconciliations are mostly clean, so the demo seeds far fewer problems than the
+    # generator's defaults: about one invoice in ten does not reconcile.
     first = generate_dataset(
-        Config(seed=DEMO_SEED, period=DEMO_PERIOD, invoices=400, ambiguous_rate=0.03)
+        Config(
+            seed=DEMO_SEED,
+            period=DEMO_PERIOD,
+            invoices=400,
+            missing_rate=0.02,
+            amount_mismatch_rate=0.015,
+            duplicate_rate=0.01,
+            partial_rate=0.01,
+            misreferenced_rate=0.01,
+            currency_mismatch_rate=0.005,
+            ambiguous_rate=0.01,
+            unmatched_payment_rate=0.01,
+        )
     )
     write_dataset(first, first_dir)
     write_dataset(apply_corrections(first, seed=DEMO_SEED), corrected_dir)

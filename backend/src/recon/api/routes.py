@@ -16,6 +16,7 @@ from recon.api.schemas import (
     CaseDetailOut,
     CasePage,
     DemoOut,
+    ErrorBody,
     MatchPage,
     NoteBody,
     PeriodOut,
@@ -44,7 +45,14 @@ from recon.persistence.repository import (
 from recon.pipeline import PeriodOutcome, reconcile_period
 from recon.profiles import RECONCILIATION_SOURCES
 
-router = APIRouter(prefix="/api")
+ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    404: {"model": ErrorBody, "description": "The profile, period or case does not exist."},
+    409: {"model": ErrorBody, "description": "The request conflicts with the current state."},
+    413: {"model": ErrorBody, "description": "The uploaded file is too large."},
+    422: {"model": ErrorBody, "description": "The request is not valid."},
+}
+
+router = APIRouter(prefix="/api", responses=ERROR_RESPONSES)
 
 IdempotencyKey = Annotated[str | None, Header(alias="Idempotency-Key")]
 
@@ -308,7 +316,7 @@ def _sources_of(session: Session, profile_id: uuid.UUID) -> tuple[str, ...]:
     return RECONCILIATION_SOURCES[get_profile(session, profile_id).reconciliation_type]
 
 
-demo_router = APIRouter(prefix="/api/demo")
+demo_router = APIRouter(prefix="/api/demo", responses=ERROR_RESPONSES)
 
 
 @demo_router.get("", response_model=DemoOut)
