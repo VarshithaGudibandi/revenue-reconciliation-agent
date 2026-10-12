@@ -64,6 +64,22 @@ The API is under `/api`: profiles and periods, a per-period summary, the list of
 
 The dashboard shows the share of invoices that reconciled, what is at stake by problem type and currency, and two tabs: cases that need attention, and invoices that reconciled. Every chart has a table view. Opening a case shows the records involved, an explanation, the history and notes. The explanations are written by rules from the records (`backend/src/recon/api/explain.py`); no language model is involved yet, and the interface says so.
 
+## Column mapping
+
+A profile of a source file (`backend/src/recon/mapping/profile.py`) holds facts about each column that are computed locally: how many values read as a date in each known format, how many read as an amount with a decimal point or comma, how many are currency codes, how unique the values are, and what shapes they take (`INV-000123` becomes `A+-9+`). `FileProfile.describe()` returns the profile without any cell value.
+
+The baseline mapper (`mapping/baseline.py`) uses no language model. It decides from the data first and from header words last:
+
+- the amount column is the one whose values equal the other file's amounts, which separates a gross amount from a net amount, a tax amount or a fee;
+- the invoice id and the payment reference are found together, because payments cite invoice ids;
+- the customer columns are the pair that share their values across the two files;
+- among several date columns, the issue date is the one payments fall after, not before;
+- a date that fits both day-month and month-day is returned as a question, not as a guess.
+
+Every field is either confident or comes with the alternatives, so a user can be asked. `python -m recon.evaluation.mapping_eval` runs the mapper over every pair of export styles and reports, per field, whether it was correct, asked (the right answer was among the options), missed, or confidently wrong. The last is the one that matters. A second variant keeps only invoices from the first 12 days of the month, where the date order cannot be read from the values and asking is the right answer.
+
+On the generated exports the baseline reads all 30 style pairs correctly for every seed I ran, never confidently wrong, and asks about the date order and some amounts in the first-12-days variant. I wrote the generator, the styles and the baseline, so this shows that the baseline works on my data, not how it does on real exports. The two held-out styles were written first and never tuned against, but they are modelled on layouts I know about, so they are not an independent test either.
+
 ## Synthetic data
 
 The repository is public, so it only uses generated data. The generator writes an invoice export and a payment export with a known set of problems, a ground-truth file, and a second revision in which some of the problems are fixed at the source:
