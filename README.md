@@ -44,7 +44,7 @@ The browser tests in `frontend/e2e` run against a server in demo mode that serve
 E2E_BASE_URL=http://127.0.0.1:8000 npx playwright test
 ```
 
-They change the demo data (they load the corrected export), so seed again before running them a second time. CI runs them against the compose stack.
+They change the data: one test loads the corrected export and another creates a reconciliation named "Spanish ERP and bank", so start from a freshly seeded server for each run. The sample files for the setup tests are in `frontend/e2e/fixtures`; they were written with `python -m recon.datagen --seed 5 --invoices 120 --first-days 12 --invoice-style spanish --payment-style bank_statement --no-corrections`. CI runs them against the compose stack.
 
 ## How a run works
 
@@ -66,7 +66,7 @@ Who proposes the mapping is set by `RECON_MAPPER`. `auto` (the default) adds the
 
 `frontend/openapi.json` is the committed OpenAPI description. A backend test fails when it no longer matches the app, and the frontend types in `frontend/src/api/schema.ts` are generated from it (`npm run api:types`); CI fails if they are out of date.
 
-The dashboard shows the share of invoices that reconciled, what is at stake by problem type and currency, and two tabs: cases that need attention, and invoices that reconciled. Every chart has a table view. Opening a case shows the records involved, an explanation, the history and notes. The explanations are written by rules from the records (`backend/src/recon/api/explain.py`); no language model is involved yet, and the interface says so.
+The dashboard shows the share of invoices that reconciled, what is at stake by problem type and currency, and two tabs: cases that need attention, and invoices that reconciled. Every chart has a table view. "New reconciliation" (shown on its own when none exists yet) opens the setup: choose an invoice file, a payment file and a month, and the screen shows the proposed mapping field by field with the evidence for it. A field the data settles is marked "Confident" and anything else "Needs your answer"; the date order and an amount column the rules cannot tell apart stay open until the user picks one, and the create button stays disabled until nothing is open. Below the mapping, a table shows the first rows of each file as they will be read with the current choices, with the rows that were rejected, so a wrong choice shows up before anything is saved. A banner says whether the suggestions came from the rules alone or from the rules and a model. Opening a case shows the records involved, an explanation, the history and notes. The explanations are written by rules from the records (`backend/src/recon/api/explain.py`); no language model is involved yet, and the interface says so.
 
 ## Column mapping
 

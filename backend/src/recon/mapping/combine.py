@@ -34,7 +34,7 @@ def _merge(
         return r_value, r_sure or m_sure, others(r_value, r_alts, m_alts), why
     if r_sure and m_sure:
         both = others(None, (r_value, m_value), r_alts, m_alts)
-        return None, False, both, ("the rules and the model disagree", *r_why, *m_why)
+        return None, False, both, ("The rules and the model disagree", *r_why, *m_why)
     if r_sure:
         return r_value, True, others(r_value, (m_value,), r_alts, m_alts), (*r_why, *m_why)
     if m_sure:
@@ -42,7 +42,7 @@ def _merge(
             m_value,
             False,
             others(m_value, (r_value,), r_alts, m_alts),
-            ("suggested by the model; the rules could not settle it", *m_why),
+            ("Suggested by the model; the rules could not settle it", *m_why),
         )
     chosen = m_value if m_value is not None else r_value
     return chosen, False, others(chosen, (r_value, m_value), r_alts, m_alts), (*r_why, *m_why)

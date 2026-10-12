@@ -446,8 +446,13 @@ def test_upload_requests_are_checked(api: Api, tmp_path: Path) -> None:
     assert not list(api.storage.rglob("*.csv"))
 
 
-def test_the_demo_endpoints_are_absent_unless_the_demo_is_on(api: Api) -> None:
-    assert api.client.get("/api/demo").status_code == 404
+def test_the_demo_controls_are_absent_unless_the_demo_is_on(api: Api) -> None:
+    assert api.client.get("/api/demo").json() == {
+        "enabled": False,
+        "profile_id": None,
+        "period": "2026-01",
+        "corrected_files_loaded": False,
+    }
     assert api.client.post("/api/demo/load-corrected-export").status_code == 404
 
 

@@ -26,7 +26,7 @@ def test_a_model_that_is_sure_where_the_rules_are_not_becomes_a_suggestion() -> 
     assert merged.column == "b"
     assert not merged.confident
     assert merged.alternatives == ("a",)
-    assert "suggested by the model" in merged.reasons[0]
+    assert "Suggested by the model" in merged.reasons[0]
 
 
 def test_two_confident_answers_that_disagree_are_a_question_with_both_offered() -> None:

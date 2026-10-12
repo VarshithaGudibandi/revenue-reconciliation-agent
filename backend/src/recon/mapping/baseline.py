@@ -112,14 +112,14 @@ def _choose(
         column=best,
         confident=clear,
         alternatives=others,
-        reasons=(f"{reason}: {best_score:.2f}",),
+        reasons=(reason.format(score=best_score),),
     )
 
 
 def _currency(profile: FileProfile) -> FieldChoice:
     found = [c.header for c in profile.columns if c.currency_like()]
     if len(found) == 1:
-        return field_choice(found[0], True, reasons=("values are currency codes",))
+        return field_choice(found[0], True, reasons=("Values are currency codes",))
     return field_choice(alternatives=tuple(found))
 
 
@@ -136,10 +136,10 @@ def _separator(profile: FileProfile, currency: str | None) -> ValueChoice:
     if not amount_columns:
         return value_choice()
     if votes["."] and votes[","]:
-        return value_choice(alternatives=(".", ","), reasons=("columns disagree",))
+        return value_choice(alternatives=(".", ","), reasons=("The columns disagree",))
     if votes[","]:
-        return value_choice(",", True, reasons=("amounts only read with a decimal comma",))
-    return value_choice(".", True, reasons=("amounts read with a decimal point",))
+        return value_choice(",", True, reasons=("Amounts only read with a decimal comma",))
+    return value_choice(".", True, reasons=("Amounts read with a decimal point",))
 
 
 def _amount_columns(
@@ -165,12 +165,15 @@ def _amount_columns(
 
     def side(columns: list[str], index: int) -> FieldChoice:
         if len(columns) == 1:
-            return field_choice(columns[0], True, reasons=("the only amount column",))
+            return field_choice(columns[0], True, reasons=("The only amount column",))
         scores = {
             c: max((v for k, v in agreement.items() if k[index] == c), default=0.0) for c in columns
         }
         return _choose(
-            scores, minimum=MIN_LINK, margin=MARGIN, reason="amounts equal the other file's"
+            scores,
+            minimum=MIN_LINK,
+            margin=MARGIN,
+            reason="Matches {score:.0%} of the other file's amounts",
         )
 
     return side(inv_cols, 0), side(pay_cols, 1)
@@ -202,7 +205,7 @@ def _link(
             (s for (i, p), s in ranked[1:] if i != inv and p != pay and s >= MIN_LINK), 0.0
         )
         confident = score - rival >= MARGIN
-        reason = f"{score:.0%} of {pay} values name an invoice in {inv}"
+        reason = f"{score:.0%} of the values in {pay} name an invoice in {inv}"
         return field_choice(inv, confident, reasons=(reason,)), field_choice(
             pay, confident, reasons=(reason,)
         )
@@ -210,7 +213,7 @@ def _link(
     # Nothing in the payments names an invoice: say there is no reference column, unless
     # something weakly resembles one.
     return field_choice(), field_choice(
-        None, weak < 0.05, reasons=("no payment value names an invoice",)
+        None, weak < 0.05, reasons=("No payment value names an invoice",)
     )
 
 
@@ -239,9 +242,11 @@ def _record_id(pool: Sequence[ColumnProfile], words: Sequence[str]) -> FieldChoi
     if not unique:
         return field_choice()
     if len(unique) == 1:
-        return field_choice(unique[0].header, True, reasons=("the only column of unique values",))
+        return field_choice(unique[0].header, True, reasons=("The only column of unique values",))
     scores = {c.header: lexicon_score(c.header, words, NOT_AN_ID_WORDS) for c in unique}
-    return _choose(scores, minimum=-100, margin=LEXICON_MARGIN, reason="header words")
+    return _choose(
+        scores, minimum=-100, margin=LEXICON_MARGIN, reason="The header text points to this field"
+    )
 
 
 def _date_format(column: ColumnProfile | None) -> ValueChoice:
@@ -250,16 +255,16 @@ def _date_format(column: ColumnProfile | None) -> ValueChoice:
     formats = column.date_formats()
     if len(formats) == 1:
         return value_choice(
-            formats[0], True, reasons=("every value reads as a date in this format",)
+            formats[0], True, reasons=("Every value reads as a date in this format",)
         )
     if len(formats) == 2 and swapped_day_month(formats[0]) == formats[1]:
         return value_choice(
             None,
             False,
             formats,
-            ("every value fits both day-month and month-day: the values cannot say which",),
+            ("Every value fits both day-month and month-day: the values cannot say which",),
         )
-    return value_choice(None, False, formats, ("more than one format fits",))
+    return value_choice(None, False, formats, ("More than one format fits",))
 
 
 def _date_format_for(profile: FileProfile, date: FieldChoice) -> ValueChoice:
@@ -273,9 +278,9 @@ def _date_format_for(profile: FileProfile, date: FieldChoice) -> ValueChoice:
     choices = [_date_format(profile.column(h)) for h in headers]
     first = choices[0]
     if first.confident and all(c.value == first.value and c.confident for c in choices):
-        return value_choice(first.value, True, reasons=("every candidate date column uses it",))
+        return value_choice(first.value, True, reasons=("Every candidate date column uses it",))
     options = tuple(dict.fromkeys(f for h in headers for f in profile.column(h).date_formats()))
-    return value_choice(None, False, options, ("the date column is not settled",))
+    return value_choice(None, False, options, ("The date column is not settled",))
 
 
 def _dates(
@@ -303,7 +308,7 @@ def _dates(
         if not cands:
             return field_choice()
         if len(cands) == 1:
-            return field_choice(cands[0].header, True, reasons=("the only date column",))
+            return field_choice(cands[0].header, True, reasons=("The only date column",))
         by_lag = {
             c.header: max((v for k, v in lag.items() if k[index] == c.header), default=0.0)
             for c in cands
@@ -314,12 +319,17 @@ def _dates(
                 ranked[0][0],
                 True,
                 alternatives=tuple(c for c, _ in ranked[1:]),
-                reasons=("payments fall after this date, not before it",),
+                reasons=("Payments fall after this date, not before it",),
             )
         by_words = {
             c.header: float(lexicon_score(c.header, DATE_WORDS, NOT_THE_DATE_WORDS)) for c in cands
         }
-        return _choose(by_words, minimum=-100, margin=LEXICON_MARGIN, reason="header words")
+        return _choose(
+            by_words,
+            minimum=-100,
+            margin=LEXICON_MARGIN,
+            reason="The header text points to this field",
+        )
 
     return side(inv_cands, 0), side(pay_cands, 1)
 
@@ -389,11 +399,13 @@ def _by_words(
     if not columns:
         return field_choice()
     if len(columns) == 1:
-        return field_choice(columns[0].header, True, reasons=(f"the only {what} column",))
+        return field_choice(columns[0].header, True, reasons=(f"The only {what} column",))
     scores = {c.header: float(lexicon_score(c.header, positive, negative)) for c in columns}
-    choice = _choose(scores, minimum=-100, margin=LEXICON_MARGIN, reason="header words")
+    choice = _choose(
+        scores, minimum=-100, margin=LEXICON_MARGIN, reason="The header text points to this field"
+    )
     if choice.column is not None and scores[choice.column] <= 0:
-        return field_choice(None, False, tuple(scores), ("no header word points to this field",))
+        return field_choice(None, False, tuple(scores), ("No header word points to this field",))
     return choice
 
 

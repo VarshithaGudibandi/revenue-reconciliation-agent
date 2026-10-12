@@ -8,7 +8,6 @@ A mapper built around the first group looks better on it than it should.
 """
 
 import argparse
-import dataclasses
 import json
 import os
 import tempfile
@@ -17,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from recon.datagen.generate import Config, generate_dataset
+from recon.datagen.generate import Config, first_days, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles, style_group
 from recon.datagen.writer import write_dataset
 from recon.evaluation.mapping_score import FILE_OUTCOMES, classify, score_file
@@ -55,9 +54,7 @@ def run_case(
 ) -> CaseResult:
     dataset = generate_dataset(Config(seed=seed, invoices=size))
     if variant == "first_12_days":
-        dataset = dataclasses.replace(
-            dataset, invoices=tuple(i for i in dataset.invoices if i.issue_date.day <= 12)
-        )
+        dataset = first_days(dataset, 12)
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory)
         write_dataset(dataset, path, styles)

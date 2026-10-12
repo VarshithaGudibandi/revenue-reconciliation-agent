@@ -1,4 +1,5 @@
 import calendar
+import dataclasses
 import itertools
 import random
 from dataclasses import dataclass, replace
@@ -378,4 +379,16 @@ def apply_corrections(dataset: Dataset, *, seed: int, fix_fraction: float = 0.6)
             anomalies=(*remaining, *created),
             resolved=tuple(resolved),
         ),
+    )
+
+
+def first_days(dataset: Dataset, last_day: int) -> Dataset:
+    """Keep only the invoices issued on days 1 to ``last_day`` of the month.
+
+    The payments stay as they are and the ground truth is not rewritten, so the result is for
+    exercising file reading, not for scoring the engine. With ``last_day`` 12 the dates of an
+    invoice file read the same under day-month and month-day.
+    """
+    return dataclasses.replace(
+        dataset, invoices=tuple(i for i in dataset.invoices if i.issue_date.day <= last_day)
     )

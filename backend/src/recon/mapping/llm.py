@@ -84,9 +84,9 @@ def _choice(
         return field_choice(None, sure and name == "reference", others, reasons)
     problem = CHECKS[name](profile.column(column))
     if problem is not None:
-        return field_choice(None, False, (column, *others), (*reasons, f"data check: {problem}"))
+        return field_choice(None, False, (column, *others), (*reasons, f"Data check: {problem}"))
     if column in reused:
-        return field_choice(column, False, others, (*reasons, "the model used it for two fields"))
+        return field_choice(column, False, others, (*reasons, "The model used it for two fields"))
     return field_choice(column, sure, others, reasons)
 
 
@@ -100,14 +100,14 @@ def _date_format(
         return value_choice(value, sure and value is not None, (), reasons)
     column = date.column
     if column is None:
-        return value_choice(None, False, (), (*reasons, "no date column was settled"))
+        return value_choice(None, False, (), (*reasons, "No date column was settled"))
     fits = profile.column(column).date_formats()
     if len(fits) != 1:
         return value_choice(
-            None, False, fits, (*reasons, "the values fit more than one date order or format")
+            None, False, fits, (*reasons, "The values fit more than one date order or format")
         )
     if value != fits[0]:
-        return value_choice(None, False, fits, (*reasons, "the values do not fit that format"))
+        return value_choice(None, False, fits, (*reasons, "The values do not fit that format"))
     return value_choice(value, sure, (), reasons)
 
 
@@ -120,10 +120,10 @@ def _decimal_separator(
     if not validate:
         return value_choice(value, sure and value is not None, (), reasons)
     if amount.column is None:
-        return value_choice(None, False, (), (*reasons, "no amount column was settled"))
+        return value_choice(None, False, (), (*reasons, "No amount column was settled"))
     fits = profile.column(amount.column).amount_separators()
     if value not in fits:
-        return value_choice(None, False, fits, (*reasons, "the amounts do not read that way"))
+        return value_choice(None, False, fits, (*reasons, "The amounts do not read that way"))
     return value_choice(value, sure, (), reasons)
 
 

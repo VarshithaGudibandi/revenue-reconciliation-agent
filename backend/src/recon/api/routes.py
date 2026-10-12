@@ -316,11 +316,13 @@ def _sources_of(session: Session, profile_id: uuid.UUID) -> tuple[str, ...]:
     return RECONCILIATION_SOURCES[get_profile(session, profile_id).reconciliation_type]
 
 
-demo_router = APIRouter(prefix="/api/demo", responses=ERROR_RESPONSES)
-
-
-@demo_router.get("", response_model=DemoOut)
+@router.get("/demo", response_model=DemoOut)
 def demo(sessions: Sessions, settings: AppSettings) -> DemoOut:
+    """Whether the server runs in demo mode, so the interface knows whether to offer the demo."""
+    if not settings.demo:
+        return DemoOut(
+            enabled=False, profile_id=None, period=DEMO_PERIOD, corrected_files_loaded=False
+        )
     state = demo_state(sessions, settings.storage_dir)
     return DemoOut(
         enabled=True,
@@ -328,6 +330,9 @@ def demo(sessions: Sessions, settings: AppSettings) -> DemoOut:
         period=DEMO_PERIOD,
         corrected_files_loaded=state.corrected_files_loaded,
     )
+
+
+demo_router = APIRouter(prefix="/api/demo", responses=ERROR_RESPONSES)
 
 
 @demo_router.post("/load-corrected-export", response_model=UploadOut)

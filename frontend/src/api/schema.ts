@@ -113,7 +113,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Demo */
+        /**
+         * Demo
+         * @description Whether the server runs in demo mode, so the interface knows whether to offer the demo.
+         */
         get: operations["demo_api_demo_get"];
         put?: never;
         post?: never;

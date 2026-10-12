@@ -2217,6 +2217,7 @@
     },
     "/api/demo": {
       "get": {
+        "description": "Whether the server runs in demo mode, so the interface knows whether to offer the demo.",
         "operationId": "demo_api_demo_get",
         "responses": {
           "200": {

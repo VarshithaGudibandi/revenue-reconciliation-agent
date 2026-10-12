@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from recon.datagen.generate import Config, apply_corrections, generate_dataset
+from recon.datagen.generate import Config, apply_corrections, first_days, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
 
@@ -15,6 +15,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--period", default="2026-01", help="YYYY-MM")
     parser.add_argument("--invoices", type=int, default=200)
+    parser.add_argument(
+        "--first-days",
+        type=int,
+        metavar="N",
+        help="keep only invoices issued on days 1 to N; for trying file reading, not scoring",
+    )
     parser.add_argument("--invoice-style", choices=sorted(INVOICE_STYLES), default="default")
     parser.add_argument("--payment-style", choices=sorted(PAYMENT_STYLES), default="default")
     parser.add_argument(
@@ -27,6 +33,8 @@ def main() -> None:
     config = Config(seed=args.seed, period=args.period, invoices=args.invoices)
     styles = ExportStyles(args.invoice_style, args.payment_style)
     first = generate_dataset(config)
+    if args.first_days:
+        first = first_days(first, args.first_days)
     write_dataset(first, args.out / "v1", styles)
     print(f"v1: {len(first.invoices)} invoices, {len(first.payments)} payments")
 
