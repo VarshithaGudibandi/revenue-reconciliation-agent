@@ -13,6 +13,12 @@ class ExceptionKind(StrEnum):
     MISREFERENCED_PAYMENT = "misreferenced_payment"
     CURRENCY_MISMATCH = "currency_mismatch"
     AMBIGUOUS_PAYMENT = "ambiguous_payment"
+    # Bank deposits against processor payouts (recon.engine.deposits).
+    DEPOSIT_MISMATCH = "deposit_mismatch"
+    MISSING_PAYOUTS = "missing_payouts"
+    UNDEPOSITED_PAYOUT = "undeposited_payout"
+    PROPOSED_GROUPING = "proposed_grouping"
+    AMBIGUOUS_GROUPING = "ambiguous_grouping"
 
 
 @dataclass(frozen=True)

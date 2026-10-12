@@ -17,7 +17,7 @@ A reference that points at another counterparty's invoice is not a match.
 """
 
 from collections import defaultdict, deque
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from recon.domain.money import Money
 from recon.engine.model import (
@@ -28,6 +28,13 @@ from recon.engine.model import (
     ReconciliationResult,
 )
 from recon.ingestion.normalize import NormalizedRecord
+
+Classifier = Callable[
+    [NormalizedRecord, Sequence[NormalizedRecord], EngineConfig], Match | ReconciliationException
+]
+Ambiguous = Callable[
+    [Sequence[NormalizedRecord], Sequence[NormalizedRecord]], ReconciliationException
+]
 
 
 def reconcile(
@@ -45,8 +52,16 @@ def reconcile(
     claimed_invoices: set[str] = set()
     claimed_payments: set[str] = set()
 
-    _reference_pass(
-        invoices, payments, config, matches, exceptions, claimed_invoices, claimed_payments
+    reference_pass(
+        invoices,
+        payments,
+        config,
+        matches,
+        exceptions,
+        claimed_invoices,
+        claimed_payments,
+        _classify,
+        _ambiguous,
     )
     _residual_pass(invoices, payments, config, exceptions, claimed_invoices, claimed_payments)
 
@@ -70,7 +85,7 @@ def reconcile(
     return ReconciliationResult(tuple(matches), tuple(exceptions))
 
 
-def _reference_pass(
+def reference_pass(
     invoices: Sequence[NormalizedRecord],
     payments: Sequence[NormalizedRecord],
     config: EngineConfig,
@@ -78,7 +93,13 @@ def _reference_pass(
     exceptions: list[ReconciliationException],
     claimed_invoices: set[str],
     claimed_payments: set[str],
+    classify: Classifier,
+    ambiguous: Ambiguous,
 ) -> None:
+    """Group each record of the second kind under the record of the first that its reference
+    names, for the same counterparty, and let ``classify`` say whether the group reconciles.
+    Records whose reference fits several of the first kind go to ``ambiguous``. The engine for
+    invoices and payments and the one for deposits and payouts share this pass."""
     by_key: dict[str, list[NormalizedRecord]] = defaultdict(list)
     for invoice in invoices:
         by_key[invoice.key].append(invoice)
@@ -101,7 +122,7 @@ def _reference_pass(
     invoice_by_id = {invoice.record_id: invoice for invoice in invoices}
     for invoice_id, paid_by in owned.items():
         invoice = invoice_by_id[invoice_id]
-        outcome = _classify(invoice, paid_by, config)
+        outcome = classify(invoice, paid_by, config)
         if isinstance(outcome, Match):
             matches.append(outcome)
         else:
@@ -113,7 +134,7 @@ def _reference_pass(
     # told apart by reference alone.
     for invoice_ids, paid_by in shared.items():
         group = [invoice_by_id[i] for i in invoice_ids]
-        exceptions.append(_ambiguous(group, paid_by))
+        exceptions.append(ambiguous(group, paid_by))
         claimed_invoices.update(invoice_ids)
         claimed_payments.update(p.record_id for p in paid_by)
 
@@ -181,7 +202,7 @@ def _residual_pass(
     for start in sorted(edges):
         if start in seen:
             continue
-        component = _component(start, edges)
+        component = component_of(start, edges)
         seen.update(component)
         invoice_ids = sorted(i for kind, i in component if kind == "invoice")
         payment_ids = sorted(p for kind, p in component if kind == "payment")
@@ -203,7 +224,7 @@ def _residual_pass(
         claimed_payments.update(payment_ids)
 
 
-def _component(
+def component_of(
     start: tuple[str, str], edges: dict[tuple[str, str], set[tuple[str, str]]]
 ) -> set[tuple[str, str]]:
     component = {start}
