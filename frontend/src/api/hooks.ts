@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { newIdempotencyKey } from "../lib/formatters";
-import { api, type CaseQuery, type CaseDetail } from "./client";
+import { api, type CaseDetail, type CaseQuery, type MappingBody } from "./client";
 
 export const useProfiles = () => useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
 
@@ -73,6 +73,38 @@ export function useCaseAction(caseId: string) {
     onError: () => {
       // A stale version or a state change elsewhere: show the case as it is now.
       void client.invalidateQueries({ queryKey: ["case", caseId] });
+    },
+  });
+}
+
+export function usePropose() {
+  return useMutation({
+    mutationFn: (files: { invoices: File; payments: File; period: string }) =>
+      api.propose(files.invoices, files.payments, files.period),
+  });
+}
+
+export const usePreview = (
+  proposalId: string | undefined,
+  body: { invoices: MappingBody; payments: MappingBody } | null,
+) =>
+  useQuery({
+    queryKey: ["preview", proposalId, body],
+    queryFn: () => api.previewMapping(proposalId!, body!),
+    enabled: !!proposalId && body !== null,
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+  });
+
+export function useConfirm(proposalId: string) {
+  const client = useQueryClient();
+  const refresh = useRefreshAfterChange();
+  return useMutation({
+    mutationFn: (body: { name: string; invoices: MappingBody; payments: MappingBody }) =>
+      api.confirmMapping(proposalId, body),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["profiles"] });
+      void refresh();
     },
   });
 }

@@ -8,6 +8,13 @@ export type MatchRow = Schemas["MatchRow"];
 export type PeriodSummary = Schemas["PeriodSummary"];
 export type Upload = Schemas["UploadOut"];
 export type AcceptReason = Schemas["AcceptBody"]["reason"];
+export type Proposal = Schemas["ProposalOut"];
+export type FileProposal = Schemas["FileProposalOut"];
+export type ColumnChoice = Schemas["ColumnChoiceOut"];
+export type MappingBody = Schemas["MappingBody"];
+export type Preview = Schemas["PreviewOut"];
+export type FilePreview = Schemas["FilePreview"];
+export type Confirmation = Schemas["ConfirmOut"];
 
 export class ApiError extends Error {
   constructor(
@@ -105,6 +112,19 @@ export const api = {
       body: form,
     });
   },
+  propose: (invoices: File, payments: File, period: string) => {
+    const form = new FormData();
+    form.append("invoices", invoices);
+    form.append("payments", payments);
+    form.append("period", period);
+    return request<Proposal>("/api/setup/proposals", { method: "POST", body: form });
+  },
+  previewMapping: (proposalId: string, body: { invoices: MappingBody; payments: MappingBody }) =>
+    post<Preview>(`/api/setup/proposals/${proposalId}/preview`, body),
+  confirmMapping: (
+    proposalId: string,
+    body: { name: string; invoices: MappingBody; payments: MappingBody },
+  ) => post<Confirmation>(`/api/setup/proposals/${proposalId}/confirm`, body),
   demo: () => request<Schemas["DemoOut"]>("/api/demo"),
   loadCorrectedExport: () =>
     request<Upload>("/api/demo/load-corrected-export", { method: "POST" }),

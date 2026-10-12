@@ -677,3 +677,93 @@ table.table {
     padding: 16px 16px 48px;
   }
 }
+
+/* Setting up a reconciliation */
+.setup,
+.setup-review,
+.setup-start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.setup-start {
+  max-width: 520px;
+}
+
+.setup-start input[type="file"],
+.setup-start input[type="month"] {
+  max-width: 100%;
+}
+
+.mapping-card {
+  overflow-x: auto;
+}
+
+.mapping-card .table td {
+  vertical-align: top;
+}
+
+.mapping-card .table td:nth-child(2) .select {
+  width: 100%;
+  min-width: 180px;
+}
+
+.reasons {
+  margin-top: 4px;
+}
+
+.setup-confirm {
+  display: grid;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.setup-confirm .input {
+  width: 100%;
+}
+
+.mapping-card .table {
+  table-layout: fixed;
+  min-width: 640px;
+}
+
+.mapping-card .table th:nth-child(1) {
+  width: 27%;
+}
+
+.mapping-card .table th:nth-child(2) {
+  width: 45%;
+}
+
+.mapping-card .table th:nth-child(3) {
+  width: 28%;
+}
+
+@media (max-width: 640px) {
+  .mapping-card .table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .mapping-card .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .mapping-card .table tr {
+    display: grid;
+    gap: 6px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--axis);
+  }
+
+  .mapping-card .table td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+}

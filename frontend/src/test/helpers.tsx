@@ -78,3 +78,82 @@ export function caseDetail(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+function choice(field: string, column: string | null, confident: boolean, extra: Record<string, unknown> = {}) {
+  return { field, column, confident, alternatives: [], reasons: [], ...extra };
+}
+
+/** A proposal in which everything is settled except the invoice total and the invoice date order. */
+export function proposalFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "proposal-1",
+    period: "2026-01",
+    status: "proposed",
+    mapper: "rules",
+    model: null,
+    profile_id: null,
+    date_formats: ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
+    invoices: {
+      source: "invoices",
+      file_name: "invoices.csv",
+      rows: 48,
+      headers: ["inv", "cust", "dt", "ccy", "net", "gross"],
+      needs_answer: 2,
+      fields: [
+        choice("record_id", "inv", true, { reasons: ["The only column of unique values"] }),
+        choice("counterparty", "cust", true),
+        choice("date", "dt", true),
+        choice("amount", null, false, {
+          alternatives: ["net", "gross"],
+          reasons: ["No header word points to this field"],
+        }),
+        choice("currency", "ccy", true),
+      ],
+      date_format: {
+        value: null,
+        confident: false,
+        alternatives: ["%d/%m/%Y", "%m/%d/%Y"],
+        reasons: ["Every value fits both day-month and month-day"],
+      },
+      decimal_separator: { value: ".", confident: true, alternatives: [], reasons: [] },
+    },
+    payments: {
+      source: "payments",
+      file_name: "payments.csv",
+      rows: 125,
+      headers: ["pid", "ref", "cust", "dt", "ccy", "amt"],
+      needs_answer: 0,
+      fields: [
+        choice("record_id", "pid", true),
+        choice("counterparty", "cust", true),
+        choice("date", "dt", true),
+        choice("amount", "amt", true),
+        choice("currency", "ccy", true),
+        choice("reference", "ref", true),
+      ],
+      date_format: { value: "%m/%d/%Y", confident: true, alternatives: [], reasons: [] },
+      decimal_separator: { value: ".", confident: true, alternatives: [], reasons: [] },
+    },
+    ...overrides,
+  };
+}
+
+export function previewFixture(ready = true, invoiceError: string | null = null) {
+  const sample = (row: number, id: string, reference: string | null = null) => ({
+    row,
+    record_id: id,
+    counterparty: "CUST-0001",
+    occurred_on: "2026-01-12",
+    amount: amount(42_000),
+    reference,
+  });
+  const file = (source: string, records: number, error: string | null = null) => ({
+    source,
+    error,
+    records_read: error ? 0 : records,
+    rejected: 0,
+    sample: [sample(1, source === "invoices" ? "INV-000001" : "PAY-000001", source === "payments" ? "INV000001" : null)],
+    rejections: [],
+  });
+  return { invoices: file("invoices", 48, invoiceError), payments: file("payments", 125), ready };
+}
