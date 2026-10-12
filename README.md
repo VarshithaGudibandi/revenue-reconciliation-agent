@@ -97,6 +97,8 @@ The answer is a structured output in which every column field can only be one of
 
 `python -m recon.evaluation.mapping_eval --mapper llm` runs the same evaluation as the baseline, with the model mapping each file on its own. It needs `ANTHROPIC_API_KEY`. `--record FILE` saves each answer to a file, and `--replay FILE` serves those answers without the network or a key, so the evaluation can be repeated by someone who cannot call the API; it cannot answer a question that was not recorded. The default model is `claude-opus-5-5` at low effort, with server-side refusal fallbacks switched on. Forced tool use is not available on that model, which is why the answer is a structured output. The command prints the number of calls, the tokens, and an estimated cost at list price.
 
+`--mapper hybrid` combines the rules (mapped with both files in sight) with the model: where they agree the answer is confident, a confident rule is not overruled by the model, a model that is sure where the rules are not is followed as a suggestion that is still a question, and two confident answers that disagree are a conflict left to the user.
+
 No answers are recorded in this repository yet, so there are no measured results for the model. The unit tests use a fake model, a stand-in for the API client and a recorded file written by the tests.
 
 ## Synthetic data

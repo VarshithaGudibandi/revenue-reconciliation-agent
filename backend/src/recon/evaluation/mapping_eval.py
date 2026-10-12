@@ -23,10 +23,12 @@ from recon.datagen.writer import write_dataset
 from recon.evaluation.mapping_score import FILE_OUTCOMES, classify, score_file
 from recon.ingestion.normalize import ColumnMapping
 from recon.mapping.baseline import propose_file, propose_mapping
+from recon.mapping.combine import combine
 from recon.mapping.llm import LlmMapper
 from recon.mapping.llm_client import AnthropicJson, JsonModel, RecordingJson, ReplayJson
 from recon.mapping.pairing import Mapper, each_file_alone
-from recon.mapping.profile import profile_csv_bytes
+from recon.mapping.profile import FileProfile, profile_csv_bytes
+from recon.mapping.proposal import MappingProposal
 
 GROUPS = ("development", "held_out", "stress")
 VARIANTS = ("full_month", "first_12_days")
@@ -192,7 +194,14 @@ def _llm_mapper(args: argparse.Namespace) -> LlmMapper:
         client = AnthropicJson(model=args.model, effort=args.effort)
         if args.record:
             client = RecordingJson(client, Path(args.record))
-    return LlmMapper(client, validate=args.mapper == "llm")
+    return LlmMapper(client, validate=args.mapper != "llm-unchecked")
+
+
+def _hybrid(rules: Mapper, model: Mapper) -> Mapper:
+    def both(invoices: FileProfile, payments: FileProfile) -> MappingProposal:
+        return combine(rules(invoices, payments), model(invoices, payments))
+
+    return both
 
 
 def main() -> None:
@@ -201,9 +210,10 @@ def main() -> None:
     parser.add_argument("--invoices", type=int, default=120)
     parser.add_argument(
         "--mapper",
-        choices=["baseline", "llm", "llm-unchecked"],
+        choices=["baseline", "llm", "llm-unchecked", "hybrid"],
         default="baseline",
-        help="llm-unchecked uses the model's answer without checking it against the data",
+        help="llm-unchecked skips the checks against the data; hybrid combines the "
+        "paired rules with the model",
     )
     parser.add_argument(
         "--mode",
@@ -223,6 +233,8 @@ def main() -> None:
     else:
         llm = _llm_mapper(args)
         mapper = each_file_alone(llm.propose_file)
+        if args.mapper == "hybrid":
+            mapper = _hybrid(propose_mapping, mapper)
 
     results = run_evaluation(mapper, seeds=range(args.seeds), size=args.invoices)
     print(format_report(results))
