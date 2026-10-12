@@ -69,11 +69,19 @@ def test_invoices_read_back_exactly_with_the_true_mapping(
     result = normalize_csv(tmp_path / "invoices.csv", INVOICE_STYLES[name].mapping())
 
     assert result.rejected == ()
+    has_text = INVOICE_STYLES[name].header("text") is not None
     assert [
-        (r.record_id, r.counterparty, r.occurred_on, r.amount.minor, r.amount.currency)
+        (r.record_id, r.counterparty, r.occurred_on, r.amount.minor, r.amount.currency, r.text)
         for r in result.records
     ] == [
-        (i.invoice_id, i.customer_id, i.issue_date, i.total_minor, i.currency)
+        (
+            i.invoice_id,
+            i.customer_id,
+            i.issue_date,
+            i.total_minor,
+            i.currency,
+            (i.description or None) if has_text else None,
+        )
         for i in dataset.invoices
     ]
 
@@ -90,8 +98,17 @@ def test_payments_read_back_exactly_with_the_true_mapping(
 
     has_reference = PAYMENT_STYLES[name].header("reference") is not None
     assert result.rejected == ()
+    has_text = PAYMENT_STYLES[name].header("text") is not None
     assert [
-        (r.record_id, r.counterparty, r.occurred_on, r.amount.minor, r.amount.currency, r.reference)
+        (
+            r.record_id,
+            r.counterparty,
+            r.occurred_on,
+            r.amount.minor,
+            r.amount.currency,
+            r.reference,
+            r.text,
+        )
         for r in result.records
     ] == [
         (
@@ -102,6 +119,7 @@ def test_payments_read_back_exactly_with_the_true_mapping(
             p.amount_minor,
             p.currency,
             (normalize_reference(p.reference) or None) if has_reference else None,
+            (p.memo or None) if has_text else None,
         )
         for p in dataset.payments
     ]
@@ -287,3 +305,25 @@ def test_held_out_styles_exist_and_a_file_can_carry_a_lowercase_currency(tmp_pat
 
     assert currencies == {"eur", "usd"}
     assert {p.currency for p in dataset.payments} == {"EUR", "USD"}
+
+
+def test_text_columns_exist_in_some_styles_and_not_in_the_default_ones() -> None:
+    with_text = [n for n, s in INVOICE_STYLES.items() if s.header("text")]
+    payments_with_text = [n for n, s in PAYMENT_STYLES.items() if s.header("text")]
+
+    assert INVOICE_STYLES["default"].header("text") is None
+    assert PAYMENT_STYLES["default"].header("text") is None
+    assert len(with_text) >= 5
+    assert len(payments_with_text) >= 3
+    assert INVOICE_STYLES["generic_columns"].header("text") == "Column I"
+
+
+def test_the_text_of_a_file_is_what_the_generator_wrote(tmp_path: Path) -> None:
+    dataset = dataset_for(1)
+    write_dataset(dataset, tmp_path, ExportStyles("erp_english", "bank_statement"))
+
+    invoices = read_columns(tmp_path / "invoices.csv")["Description"]
+    memos = read_columns(tmp_path / "payments.csv")["Details"]
+
+    assert invoices == [i.description for i in dataset.invoices]
+    assert memos == [p.memo for p in dataset.payments]

@@ -21,7 +21,7 @@ from recon.ingestion.normalize import ColumnMapping
 
 INVOICE_FIELDS = ("record_id", "counterparty", "date", "currency", "amount")
 PAYMENT_FIELDS = (*INVOICE_FIELDS, "reference")
-INVOICE_DISTRACTORS = ("due_date", "net_amount", "tax_amount", "status", "doc_type", "memo")
+INVOICE_DISTRACTORS = ("due_date", "net_amount", "tax_amount", "status", "doc_type")
 PAYMENT_DISTRACTORS = ("value_date", "bank_ref", "fee_amount")
 
 
@@ -61,7 +61,7 @@ class SourceStyle:
             raise ValueError(f"{self.source} style repeats a column key")
         if len(set(headers)) != len(headers):
             raise ValueError(f"{self.source} style repeats a header")
-        unknown = set(keys) - set(fields) - set(distractors)
+        unknown = set(keys) - set(fields) - set(distractors) - {"text"}
         if unknown:
             raise ValueError(f"{self.source} style has unknown columns {sorted(unknown)}")
         optional = {"reference"} if self.source == "payments" else set()
@@ -81,6 +81,7 @@ class SourceStyle:
             amount=self._required("amount"),
             currency=self._required("currency"),
             reference=self.header("reference"),
+            text=self.header("text"),
             date_format=self.date_format,
             decimal_separator=self.decimal_separator,
         )
@@ -132,6 +133,7 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
             "tax_amount": "VAT",
             "amount": "Gross Amount",
             "status": "Status",
+            "text": "Description",
         },
         "%d-%b-%Y",
         thousands=True,
@@ -159,6 +161,7 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
             "net_amount": "Nettobetrag",
             "tax_amount": "MwSt",
             "amount": "Bruttobetrag",
+            "text": "Beschreibung",
         },
         "%d.%m.%Y",
         decimal_separator=",",
@@ -175,6 +178,7 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
             "net_amount": "Base imponible",
             "tax_amount": "IVA",
             "amount": "Importe total",
+            "text": "Concepto",
         },
         "%d/%m/%Y",
         decimal_separator=",",
@@ -190,6 +194,7 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
             "due_date": "FAEDT",
             "currency": "WAERS",
             "amount": "WRBTR",
+            "text": "SGTXT",
         },
         "%Y%m%d",
     ),
@@ -206,6 +211,7 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
             "net_amount": "Imponibile",
             "tax_amount": "Imposta",
             "amount": "Importo totale",
+            "text": "Descrizione",
         },
         "%d/%m/%Y",
         decimal_separator=",",
@@ -238,6 +244,7 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
             "net_amount": "Column F",
             "tax_amount": "Column G",
             "amount": "Column H",
+            "text": "Column I",
         },
         "%m/%d/%Y",
     ),
@@ -249,7 +256,7 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
         {
             "counterparty": "*ContactName",
             "record_id": "*InvoiceNumber",
-            "memo": "Reference",
+            "text": "Reference",
             "date": "*InvoiceDate",
             "due_date": "*DueDate",
             "currency": "Currency",
@@ -284,6 +291,7 @@ PAYMENT_STYLES: dict[str, SourceStyle] = {
             "currency": "Ccy",
             "amount": "Credit Amount",
             "bank_ref": "Bank Ref",
+            "text": "Details",
         },
         "%d/%m/%Y",
         thousands=True,
@@ -298,6 +306,7 @@ PAYMENT_STYLES: dict[str, SourceStyle] = {
             "reference": "Verwendungszweck",
             "currency": "Währung",
             "amount": "Betrag",
+            "text": "Buchungstext",
         },
         "%d.%m.%Y",
         decimal_separator=",",
@@ -313,6 +322,7 @@ PAYMENT_STYLES: dict[str, SourceStyle] = {
             "currency": "currency",
             "amount": "amount",
             "fee_amount": "fee",
+            "text": "note",
         },
         "%Y-%m-%dT%H:%M:%SZ",
     ),
@@ -369,6 +379,7 @@ PAYMENT_STYLES: dict[str, SourceStyle] = {
             "currency": "Column F",
             "fee_amount": "Column G",
             "amount": "Column H",
+            "text": "Column I",
         },
         "%m/%d/%Y",
     ),
@@ -470,7 +481,7 @@ def _invoice_cell(key: str, invoice: Invoice, style: SourceStyle) -> str:
         "tax_amount": lambda: _money(tax, invoice.currency, style),
         "net_amount": lambda: _money(invoice.total_minor - tax, invoice.currency, style),
         "status": lambda: "OPEN",
-        "memo": lambda: "Monthly services",
+        "text": lambda: invoice.description,
         "doc_type": lambda: "RV",
     }
     return cells[key]()
@@ -484,6 +495,7 @@ def _payment_cell(key: str, payment: Payment, style: SourceStyle) -> str:
         "currency": lambda: _currency(payment.currency, style),
         "amount": lambda: _money(payment.amount_minor, payment.currency, style),
         "reference": lambda: payment.reference,
+        "text": lambda: payment.memo,
         "value_date": lambda: _date(
             payment.received_on + timedelta(days=1), style, payment.payment_id
         ),
