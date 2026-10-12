@@ -18,7 +18,8 @@ export function DemoBanner({ profileId }: { profileId: string | undefined }) {
     <div className="banner" role="note">
       <span>
         <strong>Demo data.</strong> Everything here is generated. To see the loop, report a fix on a
-        case, then load the corrected export, as if the source system had been fixed.
+        case, then load the corrected export, as if the source system had been fixed. To use your own
+        exports instead, choose New reconciliation.
       </span>
       <button
         type="button"

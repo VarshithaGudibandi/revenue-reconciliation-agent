@@ -7,15 +7,58 @@ Two principles shape the design:
 - **The engine does the matching and the arithmetic.** An LLM never computes a sum or decides a match on its own. It proposes column mappings, reads reference documents, judges ambiguous candidates, and writes the explanations.
 - **The data decides when an issue is resolved.** Source files are never edited. When a corrected file arrives, the affected records are matched again, and an exception closes only when the new data reconciles.
 
-## Run locally
+## Try it
+
+You need Docker with Compose, and nothing else: no account, no key, no data of your own.
 
 ```bash
+git clone https://github.com/VarshithaGudibandi/revenue-reconciliation-agent
+cd revenue-reconciliation-agent
 docker compose up --build
 ```
 
-This starts Postgres, runs the migrations, loads a demo month of generated invoices and payments, serves the API and the dashboard at <http://127.0.0.1:8000>, and starts a worker that runs the reconciliations the API queues. The demo has 400 invoices, about one in ten of which does not reconcile. The "Load corrected export" button in the demo banner loads a second payments file in which some of the problems are fixed at the source, so I can watch cases close and the ones that were not fixed stay open.
+Open <http://127.0.0.1:8000> when it says the backend is ready (the first build takes a few minutes). It starts Postgres, runs the migrations, loads generated sample data, serves the dashboard and the API, and starts a worker that runs the reconciliations. Everything in the sample data is generated; nothing is real.
 
-The demo endpoints and the banner exist only when `RECON_DEMO=true`, which the compose file sets. The compose file also sets `RECON_JOBS=queue`; without it, as in the checks below, the server reconciles inside the request.
+What there is to look at:
+
+- **Two sample reconciliations**, chosen in the header: *Demo: invoices and payments* (400 invoices, about one in ten of which does not reconcile) and *Demo: payouts and deposits*. The dashboard shows how much reconciled, what is at stake by kind of problem and currency, and the list of cases that need attention.
+- **A case.** Click one: its records, a plain-language reading of what is wrong and what to check, and its history. Report a fix, add a note, or accept the difference with a reason. You cannot mark a case resolved; only new data does that.
+- **The loop.** On the invoices demo, report a fix on a few cases, then press "Load corrected export" in the banner. A corrected payments file arrives, only the customers whose records changed are matched again, and the cases whose data now reconciles close by themselves. The ones that were not fixed stay open, and a reported fix that did not work is flagged.
+- **Setting up from files.** "New reconciliation" takes two CSV exports and shows how it reads their columns, field by field, with the evidence, asking you only what the data cannot settle. Sample files to try it with are in `frontend/e2e/fixtures` (invoices and payments), or generate your own with `python -m recon.datagen` and `python -m recon.datagen.batches` (see Synthetic data).
+- **Alerts.** The Alerts page adds a Slack, Teams or email channel, sends a test, and shows what was sent.
+
+This runs with rules only, which is the baseline every model-based step in this project is measured against. Nothing leaves your machine. Stop it with `docker compose down`, and add `-v` to delete the sample data too.
+
+## Use your own data
+
+Nothing about your data is configured by editing code. You change which of these you connect, and each step works without the later ones.
+
+**1. Your exports, with no keys.** Start with no sample data:
+
+```bash
+RECON_DEMO=false docker compose up -d --build
+```
+
+The screen then opens on "Set up a reconciliation". Choose what to reconcile (invoices and payments, or bank deposits and processor payouts), upload one export of each for a month, check how the columns were read, and confirm. After that, "Add a file" takes the next export of either file, and only what changed is matched again. Your files are stored on the machine running the stack (the `app-data` volume) and their records in its Postgres.
+
+**2. Optionally, a bucket instead of uploads.** Drop exports in an S3-compatible bucket, named `<profile>/<YYYY-MM>/<source>.csv`, and the worker registers them (see Files from a bucket). Copy `.env.example` to `.env`, set the `RECON_S3_*` values for your bucket, and run `docker compose --profile s3 up -d --build`. The key needs read access only.
+
+**3. Optionally, a language model.** Put `ANTHROPIC_API_KEY` in `.env`. The model then also proposes column mappings, can suggest which invoice an ambiguous payment was meant for ("Ask the model"), and can write a second, checked explanation of a case ("Explain with the model"). The screens say whether a model took part. What is sent: for mapping, the shape of each column and a few masked samples, never rows; for a suggestion, the payment's memo and each candidate invoice's number, description and age, not the customer or the amounts; for an explanation, the records' amounts, dates and memo text under labels (R1, R2), not the customer or the real ids, though a payer may have written names in a memo. Remove the key and everything goes back to rules.
+
+**4. Optionally, alerts.** Add a channel on the Alerts page. Email needs `RECON_SMTP_*` in `.env`.
+
+What you connect, and how:
+
+| | Connected by | Needs |
+|---|---|---|
+| Your invoices, payments, payouts and deposits | a CSV export, uploaded or dropped in a bucket | nothing, or a bucket and a read-only key |
+| A language model | `ANTHROPIC_API_KEY` in `.env` | an Anthropic key |
+| Alerts | a Slack or Teams webhook URL on the Alerts page, or `RECON_SMTP_*` | a webhook or a mail server |
+| The database | the bundled Postgres, or `RECON_DATABASE_URL` for your own | nothing, or a Postgres you run |
+
+There is no live connection to an accounting system, a payment processor or a bank. What this reads is the export they produce, as a CSV file; connecting one directly would be a reader that writes the same files into the same place, and I have not written any. Everything else in `.env.example` is optional and commented there.
+
+## Development
 
 ### Backend checks
 
@@ -43,6 +86,8 @@ The browser tests in `frontend/e2e` run against a server in demo mode that serve
 ```bash
 E2E_BASE_URL=http://127.0.0.1:8000 npx playwright test
 ```
+
+`e2e/empty-start.e2e.ts` covers the other way in, with no sample data: against a server started with `RECON_DEMO=false` and an empty database, run `E2E_EMPTY=1 E2E_BASE_URL=http://127.0.0.1:8000 npx playwright test e2e/empty-start.e2e.ts`; it skips itself otherwise, so CI does not run it.
 
 They change the data: one test loads the corrected export and another creates a reconciliation named "Spanish ERP and bank", so start from a freshly seeded server for each run. The sample files for the setup tests are in `frontend/e2e/fixtures`; they were written with `python -m recon.datagen --seed 5 --invoices 120 --first-days 12 --invoice-style spanish --payment-style bank_statement --no-corrections`. CI runs them against the compose stack.
 

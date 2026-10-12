@@ -6,6 +6,7 @@ Everything is generated, so nothing here is real financial data.
     python -m recon.demo        # create the demo profile and load the first export
 """
 
+import argparse
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -178,8 +179,18 @@ def load_corrected_export(
     return reconcile_period(sessions, profile_id, DEMO_PERIOD)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="python -m recon.demo")
+    parser.add_argument(
+        "--only-in-demo-mode",
+        action="store_true",
+        help="do nothing unless RECON_DEMO is true, so that a stack can start with no sample data",
+    )
+    args = parser.parse_args(argv)
     settings = Settings()
+    if args.only_in_demo_mode and not settings.demo:
+        print("demo mode is off (RECON_DEMO=false); no sample data loaded")
+        return
     engine = create_db_engine(settings.database_url)
     sessions = sessionmaker(engine)
     profile_id = seed_demo(sessions, settings.storage_dir)

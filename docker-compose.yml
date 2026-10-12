@@ -30,9 +30,10 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: ["python", "-m", "recon.demo"]
+    command: ["python", "-m", "recon.demo", "--only-in-demo-mode"]
     environment:
       RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
+      RECON_DEMO: ${RECON_DEMO:-true}
     volumes:
       - app-data:/data
     depends_on:
@@ -43,9 +44,13 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    # Optional: a .env file (copy .env.example) supplies keys and connections.
+    env_file:
+      - path: .env
+        required: false
     environment:
       RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
-      RECON_DEMO: "true"
+      RECON_DEMO: ${RECON_DEMO:-true}
       RECON_JOBS: queue
     ports:
       - "127.0.0.1:8000:8000"
@@ -60,6 +65,10 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     command: ["python", "-m", "recon.worker"]
+    # Optional: a .env file (copy .env.example) supplies keys and connections.
+    env_file:
+      - path: .env
+        required: false
     environment:
       RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
     depends_on:
@@ -99,13 +108,17 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     command: ["python", "-m", "recon.worker"]
+    # Optional: a .env file (copy .env.example) supplies keys and connections.
+    env_file:
+      - path: .env
+        required: false
     environment:
       RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
-      RECON_S3_BUCKET: recon
-      RECON_S3_ENDPOINT_URL: http://s3:8333
-      RECON_S3_ACCESS_KEY: recon
-      RECON_S3_SECRET_KEY: recon-local-secret
-      RECON_S3_POLL_SECONDS: "5"
+      RECON_S3_BUCKET: ${RECON_S3_BUCKET:-recon}
+      RECON_S3_ENDPOINT_URL: ${RECON_S3_ENDPOINT_URL:-http://s3:8333}
+      RECON_S3_ACCESS_KEY: ${RECON_S3_ACCESS_KEY:-recon}
+      RECON_S3_SECRET_KEY: ${RECON_S3_SECRET_KEY:-recon-local-secret}
+      RECON_S3_POLL_SECONDS: ${RECON_S3_POLL_SECONDS:-5}
     volumes:
       - app-data:/data
     depends_on:
