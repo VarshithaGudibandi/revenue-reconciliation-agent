@@ -1,5 +1,9 @@
 # Architecture
 
+![The system map](architecture-map.svg)
+
+The map above shows the parts and what flows between them. Teal is code that is always deterministic, amber is the optional language model, grey is stored data, and white is what is outside the system or what you look at. The sketch below is the same picture in text.
+
 ```text
  files (upload, or an S3 bucket)                    people (browser)
             |                                              |
