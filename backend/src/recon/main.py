@@ -13,9 +13,11 @@ from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Scope
 
+from recon.adjudication.service import build_adjudicator
 from recon.api.idempotency import IdempotencyKeyError
 from recon.api.routes import demo_router, router
 from recon.api.setup_routes import router as setup_router
+from recon.api.suggestions import NotApplicableError
 from recon.config import Settings
 from recon.db import create_db_engine
 from recon.ingestion.normalize import MappingError
@@ -68,6 +70,10 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProposalConflictError)
     def proposal_conflict(_: Request, error: ProposalConflictError) -> JSONResponse:
         return error_response(409, "proposal_confirmed", str(error))
+
+    @app.exception_handler(NotApplicableError)
+    def not_applicable(_: Request, error: NotApplicableError) -> JSONResponse:
+        return error_response(409, "not_applicable", str(error))
 
     @app.exception_handler(ProfileExistsError)
     def profile_exists(_: Request, error: ProfileExistsError) -> JSONResponse:
@@ -129,6 +135,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved
     app.state.sessions = sessionmaker(engine)
     app.state.mapper = build_mapper(resolved)
+    app.state.adjudicator = build_adjudicator(resolved)
     register_error_handlers(app)
 
     @app.get("/health")

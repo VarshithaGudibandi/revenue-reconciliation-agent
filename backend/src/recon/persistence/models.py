@@ -433,3 +433,27 @@ class MappingProposalRow(Base):
     confirmed_mapping: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = created_at()
+
+
+class CaseSuggestion(Base):
+    """What an adjudicator suggested for an ambiguous payment, kept for the exact input it read.
+
+    The input hash covers the memo and everything the adjudicator saw about the candidates, so a
+    changed file gives a new row and an unchanged one is never asked twice.
+    """
+
+    __tablename__ = "case_suggestion"
+    __table_args__ = (
+        UniqueConstraint("case_id", "input_hash", "adjudicator", name="uq_case_suggestion_input"),
+        CheckConstraint(f"input_hash ~ '{SHA256_HEX}'", name="input_hash_format"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("exception_case.id", ondelete="CASCADE"), nullable=False
+    )
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    adjudicator: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str | None] = mapped_column(Text)
+    ruling: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = created_at()

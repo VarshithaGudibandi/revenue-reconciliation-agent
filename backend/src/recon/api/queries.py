@@ -9,6 +9,7 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from recon.api.explain import RecordFacts, explain
+from recon.api.records import RecordKey, source_records
 from recon.api.schemas import (
     Amount,
     AnalysisOut,
@@ -27,6 +28,7 @@ from recon.api.schemas import (
     RunOut,
     amount_of,
 )
+from recon.api.suggestions import current_suggestion
 from recon.domain.money import Money
 from recon.persistence.case_actions import get_case_detail
 from recon.persistence.models import (
@@ -46,7 +48,6 @@ from recon.profiles import RECONCILIATION_SOURCES
 
 NEEDS_ATTENTION = ("open", "fix_reported")
 _ROLE_SOURCE = {"invoice": "invoices", "payment": "payments"}
-RecordKey = tuple[str, str]
 
 
 def list_profiles(session: Session) -> list[Profile]:
@@ -261,28 +262,6 @@ def list_matches(
     return MatchPage(total=total, items=items)
 
 
-def _record_facts(
-    session: Session, versions: dict[str, SourceFileVersion], refs: Iterable[RecordKey]
-) -> dict[RecordKey, SourceRecord]:
-    wanted: dict[str, list[str]] = defaultdict(list)
-    for role, record_id in refs:
-        wanted[role].append(record_id)
-    found: dict[RecordKey, SourceRecord] = {}
-    for role, ids in wanted.items():
-        version = versions.get(_ROLE_SOURCE[role])
-        if version is None:
-            continue
-        for start in range(0, len(ids), 5_000):
-            for record in session.scalars(
-                select(SourceRecord).where(
-                    SourceRecord.file_version_id == version.id,
-                    SourceRecord.record_id.in_(ids[start : start + 5_000]),
-                )
-            ):
-                found[(role, record.record_id)] = record
-    return found
-
-
 def _facts_for(
     refs: Sequence[RecordKey], found: dict[RecordKey, SourceRecord]
 ) -> list[RecordFacts]:
@@ -358,7 +337,7 @@ def list_case_page(
     )
 
     refs = _case_refs(session, [case.id for case in cases])
-    found = _record_facts(session, versions, {r for rs in refs.values() for r in rs})
+    found = source_records(session, versions, {r for rs in refs.values() for r in rs})
     items = []
     for case in cases:
         facts = _facts_for(refs[case.id], found)
@@ -431,7 +410,7 @@ def case_detail_out(session: Session, case_id: uuid.UUID) -> CaseDetailOut:
     detail = get_case_detail(session, case_id)
     case = detail.case
     versions = latest_file_versions(session, case.profile_id, case.period)
-    found = _record_facts(session, versions, detail.records)
+    found = source_records(session, versions, detail.records)
     facts = _facts_for(detail.records, found)
     variance = _variance(case)
     explanation = explain(case.kind, variance, facts, case.proposed_invoice_id)
@@ -469,6 +448,7 @@ def case_detail_out(session: Session, case_id: uuid.UUID) -> CaseDetailOut:
         version=case.version,
         created_at=case.created_at,
         updated_at=case.updated_at,
+        suggestion=current_suggestion(session, case_id),
         analysis=AnalysisOut(
             summary=explanation.summary,
             why=explanation.why,

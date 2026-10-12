@@ -151,6 +151,31 @@ class AnalysisOut(BaseModel):
     next_steps: list[str]
 
 
+class SuggestionOut(BaseModel):
+    """Which invoice an ambiguous payment was probably meant for. Advice for a person, never a
+    match: nothing is changed by it."""
+
+    source: Literal["rules", "rules and model"]
+    model: str | None
+    invoice_id: str | None
+    confident: bool
+    evidence: str | None
+    reasons: list[str]
+    alternatives: list[str]
+
+
+class ToolOut(BaseModel):
+    name: str
+    model: str | None
+
+
+class CapabilitiesOut(BaseModel):
+    """Who makes the suggestions, so the interface can say so and offer to ask the model."""
+
+    mapper: ToolOut
+    adjudicator: ToolOut
+
+
 class CaseDetailOut(BaseModel):
     id: uuid.UUID
     number: int
@@ -169,6 +194,7 @@ class CaseDetailOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     analysis: AnalysisOut
+    suggestion: SuggestionOut | None = None
     records: list[RecordOut]
     events: list[EventOut]
     notes: list[NoteOut]

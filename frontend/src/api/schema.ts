@@ -4,6 +4,27 @@
  */
 
 export interface paths {
+    "/api/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Capabilities
+         * @description Who proposes mappings and who suggests invoices, and whether a language model is one of
+         *     them.
+         */
+        get: operations["capabilities_api_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/{case_id}": {
         parameters: {
             query?: never;
@@ -100,6 +121,29 @@ export interface paths {
         put?: never;
         /** Post Retract Fix */
         post: operations["post_retract_fix_api_cases__case_id__retract_fix_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cases/{case_id}/suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask For Suggestion
+         * @description Ask for a suggestion of the invoice an ambiguous payment was meant for.
+         *
+         *     Advice only: nothing about the case changes. With a language model configured it is asked
+         *     once for what the case holds now; asking again returns what was kept.
+         */
+        post: operations["ask_for_suggestion_api_cases__case_id__suggestion_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -424,6 +468,14 @@ export interface components {
             /** File */
             file: string;
         };
+        /**
+         * CapabilitiesOut
+         * @description Who makes the suggestions, so the interface can say so and offer to ask the model.
+         */
+        CapabilitiesOut: {
+            adjudicator: components["schemas"]["ToolOut"];
+            mapper: components["schemas"]["ToolOut"];
+        };
         /** CaseDetailOut */
         CaseDetailOut: {
             /** Accepted Reason */
@@ -468,6 +520,7 @@ export interface components {
             status: string;
             /** Successor Case Id */
             successor_case_id: string | null;
+            suggestion?: components["schemas"]["SuggestionOut"] | null;
             /**
              * Updated At
              * Format: date-time
@@ -904,6 +957,30 @@ export interface components {
             /** Value */
             value: string | null;
         };
+        /**
+         * SuggestionOut
+         * @description Which invoice an ambiguous payment was probably meant for. Advice for a person, never a
+         *     match: nothing is changed by it.
+         */
+        SuggestionOut: {
+            /** Alternatives */
+            alternatives: string[];
+            /** Confident */
+            confident: boolean;
+            /** Evidence */
+            evidence: string | null;
+            /** Invoice Id */
+            invoice_id: string | null;
+            /** Model */
+            model: string | null;
+            /** Reasons */
+            reasons: string[];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "rules" | "rules and model";
+        };
         /** SyncOut */
         SyncOut: {
             /** Applied */
@@ -920,6 +997,13 @@ export interface components {
             updated: number;
             /** Withdrawn */
             withdrawn: number;
+        };
+        /** ToolOut */
+        ToolOut: {
+            /** Model */
+            model: string | null;
+            /** Name */
+            name: string;
         };
         /** UploadOut */
         UploadOut: {
@@ -940,6 +1024,62 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    capabilities_api_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilitiesOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     case_detail_api_cases__case_id__get: {
         parameters: {
             query?: never;
@@ -1278,6 +1418,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseDetailOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    ask_for_suggestion_api_cases__case_id__suggestion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"];
                 };
             };
             /** @description The profile, period or case does not exist. */

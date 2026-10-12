@@ -148,6 +148,23 @@
         "title": "Body_upload_file_api_profiles__profile_id__periods__period__files__source__post",
         "type": "object"
       },
+      "CapabilitiesOut": {
+        "description": "Who makes the suggestions, so the interface can say so and offer to ask the model.",
+        "properties": {
+          "adjudicator": {
+            "$ref": "#/components/schemas/ToolOut"
+          },
+          "mapper": {
+            "$ref": "#/components/schemas/ToolOut"
+          }
+        },
+        "required": [
+          "mapper",
+          "adjudicator"
+        ],
+        "title": "CapabilitiesOut",
+        "type": "object"
+      },
       "CaseDetailOut": {
         "properties": {
           "accepted_reason": {
@@ -265,6 +282,16 @@
               }
             ],
             "title": "Successor Case Id"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "updated_at": {
             "format": "date-time",
@@ -1592,6 +1619,81 @@
         "title": "SettingChoiceOut",
         "type": "object"
       },
+      "SuggestionOut": {
+        "description": "Which invoice an ambiguous payment was probably meant for. Advice for a person, never a\nmatch: nothing is changed by it.",
+        "properties": {
+          "alternatives": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "confident": {
+            "title": "Confident",
+            "type": "boolean"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "invoice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invoice Id"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "rules",
+              "rules and model"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "model",
+          "invoice_id",
+          "confident",
+          "evidence",
+          "reasons",
+          "alternatives"
+        ],
+        "title": "SuggestionOut",
+        "type": "object"
+      },
       "SyncOut": {
         "properties": {
           "applied": {
@@ -1633,6 +1735,31 @@
           "fix_not_verified"
         ],
         "title": "SyncOut",
+        "type": "object"
+      },
+      "ToolOut": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "model"
+        ],
+        "title": "ToolOut",
         "type": "object"
       },
       "UploadOut": {
@@ -1687,6 +1814,65 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/capabilities": {
+      "get": {
+        "description": "Who proposes mappings and who suggests invoices, and whether a language model is one of\nthem.",
+        "operationId": "capabilities_api_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Capabilities"
+      }
+    },
     "/api/cases/{case_id}": {
       "get": {
         "operationId": "case_detail_api_cases__case_id__get",
@@ -2235,6 +2421,77 @@
           }
         },
         "summary": "Post Retract Fix"
+      }
+    },
+    "/api/cases/{case_id}/suggestion": {
+      "post": {
+        "description": "Ask for a suggestion of the invoice an ambiguous payment was meant for.\n\nAdvice only: nothing about the case changes. With a language model configured it is asked\nonce for what the case holds now; asking again returns what was kept.",
+        "operationId": "ask_for_suggestion_api_cases__case_id__suggestion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Ask For Suggestion"
       }
     },
     "/api/demo": {

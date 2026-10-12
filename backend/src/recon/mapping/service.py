@@ -27,8 +27,8 @@ def has_credentials() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
 
 
-def build_mapper(settings: Settings) -> MapperChoice:
-    """The rules alone, or the rules combined with a language model.
+def json_client(settings: Settings) -> JsonModel | None:
+    """The language model client the settings call for, or None when only the rules are wanted.
 
     Without credentials and without a replay file the rules are used, and the interface says so,
     so the application works for someone who has no API key.
@@ -37,25 +37,29 @@ def build_mapper(settings: Settings) -> MapperChoice:
         settings.mapper == "auto" and (has_credentials() or settings.llm_replay is not None)
     )
     if not wants_model:
-        return MapperChoice("rules", None, propose_mapping)
-
-    client: JsonModel
+        return None
     if settings.llm_replay is not None:
         replay = ReplayJson(Path(settings.llm_replay))
         if not len(replay):
             raise ValueError(f"{settings.llm_replay} holds no recorded answers")
-        client = replay
-    elif has_credentials():
-        client = AnthropicJson(
+        return replay
+    if has_credentials():
+        return AnthropicJson(
             model=settings.llm_model,
             effort=settings.llm_effort,
             fallbacks=settings.llm_fallbacks,
         )
-    else:
-        raise ValueError(
-            "RECON_MAPPER=hybrid needs ANTHROPIC_API_KEY or RECON_LLM_REPLAY; "
-            "use RECON_MAPPER=rules to run without a model"
-        )
+    raise ValueError(
+        "RECON_MAPPER=hybrid needs ANTHROPIC_API_KEY or RECON_LLM_REPLAY; "
+        "use RECON_MAPPER=rules to run without a model"
+    )
+
+
+def build_mapper(settings: Settings) -> MapperChoice:
+    """The rules alone, or the rules combined with a language model."""
+    client = json_client(settings)
+    if client is None:
+        return MapperChoice("rules", None, propose_mapping)
 
     model_mapper = each_file_alone(LlmMapper(client).propose_file)
 

@@ -8,11 +8,13 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from sqlalchemy.orm import Session, sessionmaker
 
+from recon.adjudication.service import AdjudicatorChoice
 from recon.api import queries
 from recon.api.idempotency import request_hash, run_once, validate_key
 from recon.api.schemas import (
     AcceptBody,
     ActionBody,
+    CapabilitiesOut,
     CaseDetailOut,
     CasePage,
     DemoOut,
@@ -23,9 +25,12 @@ from recon.api.schemas import (
     PeriodSummary,
     ProfileOut,
     RunOut,
+    SuggestionOut,
     SyncOut,
+    ToolOut,
     UploadOut,
 )
+from recon.api.suggestions import ask_adjudicator
 from recon.config import Settings
 from recon.demo import DEMO_PERIOD, demo_state, load_corrected_export
 from recon.persistence.case_actions import (
@@ -67,6 +72,12 @@ def get_settings(request: Request) -> Settings:
     return settings
 
 
+def get_adjudicator(request: Request) -> AdjudicatorChoice:
+    adjudicator: AdjudicatorChoice = request.app.state.adjudicator
+    return adjudicator
+
+
+Adjudicator = Annotated[AdjudicatorChoice, Depends(get_adjudicator)]
 Sessions = Annotated[sessionmaker[Session], Depends(get_sessions)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
 
@@ -131,6 +142,29 @@ def cases(
             limit=limit,
             offset=offset,
         )
+
+
+@router.get("/capabilities", response_model=CapabilitiesOut)
+def capabilities(request: Request, adjudicator: Adjudicator) -> CapabilitiesOut:
+    """Who proposes mappings and who suggests invoices, and whether a language model is one of
+    them."""
+    mapper = request.app.state.mapper
+    return CapabilitiesOut(
+        mapper=ToolOut(name=mapper.name, model=mapper.model),
+        adjudicator=ToolOut(name=adjudicator.name, model=adjudicator.model),
+    )
+
+
+@router.post("/cases/{case_id}/suggestion", response_model=SuggestionOut)
+def ask_for_suggestion(
+    case_id: uuid.UUID, sessions: Sessions, adjudicator: Adjudicator
+) -> SuggestionOut:
+    """Ask for a suggestion of the invoice an ambiguous payment was meant for.
+
+    Advice only: nothing about the case changes. With a language model configured it is asked
+    once for what the case holds now; asking again returns what was kept.
+    """
+    return ask_adjudicator(sessions, case_id, adjudicator)
 
 
 @router.get("/cases/{case_id}", response_model=CaseDetailOut)
