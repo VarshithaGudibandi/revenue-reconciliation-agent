@@ -3,14 +3,15 @@ import { api, type Upload } from "../api/client";
 import { useDemo, useRefreshAfterChange } from "../api/hooks";
 
 /** Only shown when the server runs in demo mode, with generated data. */
-export function DemoBanner() {
+export function DemoBanner({ profileId }: { profileId: string | undefined }) {
   const { data } = useDemo();
   const refresh = useRefreshAfterChange();
   const load = useMutation<Upload, Error, void>({
     mutationFn: () => api.loadCorrectedExport(),
     onSuccess: () => void refresh(),
   });
-  if (!data?.enabled) return null;
+  // The banner is about the invoices demo; it means nothing on another profile.
+  if (!data?.enabled || (profileId && data.profile_id && profileId !== data.profile_id)) return null;
 
   const outcome = load.data?.cases;
   return (

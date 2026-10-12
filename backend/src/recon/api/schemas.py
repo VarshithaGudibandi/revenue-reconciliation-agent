@@ -62,8 +62,23 @@ class KindTotal(BaseModel):
     amounts: list[Amount]
 
 
+class TypeLabels(BaseModel):
+    """How to talk about the two sides of a type of reconciliation."""
+
+    type: str
+    title: str
+    left: str
+    left_plural: str
+    right: str
+    right_plural: str
+
+
 class PeriodSummary(BaseModel):
+    """``invoices``, ``payments`` and ``matched_invoices`` count the left file, the right file
+    and the left records that reconciled, whatever the type; ``labels`` says what they are."""
+
     profile_id: uuid.UUID
+    labels: TypeLabels
     period: str
     state: Literal["no_files", "waiting_for_files", "not_reconciled", "reconciled"]
     files: list[FileOut]
@@ -80,7 +95,12 @@ class PeriodSummary(BaseModel):
 
 
 class RecordOut(BaseModel):
+    """``role`` is the side of the match whatever the type (``invoice`` is the one record,
+    ``payment`` one of the several that settle it); ``label`` is what to call it: Invoice,
+    Payment, Deposit or Payout."""
+
     role: Literal["invoice", "payment"]
+    label: str
     record_id: str
     customer: str | None
     occurred_on: date | None

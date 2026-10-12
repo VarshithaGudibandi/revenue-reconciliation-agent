@@ -24,7 +24,7 @@ from recon.api.records import source_records
 from recon.api.schemas import SuggestionOut
 from recon.persistence.case_actions import get_case_detail
 from recon.persistence.models import CaseSuggestion
-from recon.persistence.repository import latest_file_versions
+from recon.persistence.repository import latest_file_versions, role_sources_of
 
 MODEL_ADJUDICATOR: Literal["rules and model"] = "rules and model"
 
@@ -48,7 +48,9 @@ def load_input(session: Session, case_id: uuid.UUID) -> AdjudicationInput | None
     if case.kind != "ambiguous_payment":
         return None
     versions = latest_file_versions(session, case.profile_id, case.period)
-    found = source_records(session, versions, detail.records)
+    found = source_records(
+        session, versions, detail.records, role_sources_of(session, case.profile_id)
+    )
     invoices = sorted(
         (
             found[(role, rid)]

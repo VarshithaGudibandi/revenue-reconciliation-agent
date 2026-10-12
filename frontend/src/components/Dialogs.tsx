@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api, type AcceptReason, type Upload } from "../api/client";
-import { useRefreshAfterChange } from "../api/hooks";
+import { useRefreshAfterChange, useSummary } from "../api/hooks";
 import { REASON_LABELS } from "../lib/labels";
+import { INVOICE_LABELS, capitalise } from "../lib/typeLabels";
 import { CloseIcon } from "./Icons";
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -93,7 +94,9 @@ export function UploadDialog({
   period: string;
   onClose: () => void;
 }) {
-  const [source, setSource] = useState("payments");
+  const labels = useSummary(profileId, period).data?.labels ?? INVOICE_LABELS;
+  const [chosen, setSource] = useState<string | null>(null);
+  const source = chosen ?? labels.right_plural;
   const [file, setFile] = useState<File | null>(null);
   const refresh = useRefreshAfterChange();
   const upload = useMutation<Upload, Error, void>({
@@ -111,8 +114,8 @@ export function UploadDialog({
       <label className="field">
         <span>Source</span>
         <select className="select" value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="invoices">Invoices</option>
-          <option value="payments">Payments</option>
+          <option value={labels.left_plural}>{capitalise(labels.left_plural)}</option>
+          <option value={labels.right_plural}>{capitalise(labels.right_plural)}</option>
         </select>
       </label>
       <label className="field">

@@ -77,7 +77,7 @@ export function App() {
       </header>
 
       <main className="page">
-        <DemoBanner />
+        <DemoBanner profileId={profileId} />
         {profiles.error ? (
           <p className="error-text" role="alert">
             {profiles.error.message}
@@ -97,7 +97,7 @@ export function App() {
         ) : null}
         {!settingUp && !alerting && profileId && periods.data && periods.data.length === 0 ? (
           <section className="card">
-            <p>No files have been added yet. Use “Add a file” to upload an invoices or payments export.</p>
+            <p>No files have been added yet. Use “Add a file” to upload an export.</p>
           </section>
         ) : null}
         {!settingUp && !alerting && profileId && period ? <Dashboard key={`${profileId}-${period}`} profileId={profileId} period={period} /> : null}

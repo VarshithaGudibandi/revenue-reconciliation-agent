@@ -368,3 +368,23 @@ def write_batches(dataset: BatchDataset, directory: Path) -> None:
             )
     text = json.dumps(truth_to_dict(dataset), indent=2, sort_keys=True)
     (directory / "ground_truth.json").write_text(text + "\n", encoding="utf-8")
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="python -m recon.datagen.batches")
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--period", default="2026-01")
+    parser.add_argument("--deposits", type=int, default=100)
+    args = parser.parse_args()
+    dataset = generate_batches(BatchConfig(args.seed, args.period, args.deposits))
+    write_batches(dataset, args.out)
+    print(
+        f"wrote {len(dataset.deposits)} deposits and {len(dataset.payouts)} payouts to {args.out}"
+    )
+
+
+if __name__ == "__main__":
+    main()

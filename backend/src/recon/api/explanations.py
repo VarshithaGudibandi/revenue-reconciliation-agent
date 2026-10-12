@@ -21,7 +21,8 @@ from recon.explanation.schema import PROMPT_VERSION, user_message
 from recon.explanation.service import ExplainerChoice
 from recon.persistence.case_actions import get_case_detail
 from recon.persistence.models import CaseExplanation
-from recon.persistence.repository import latest_file_versions
+from recon.persistence.repository import get_profile, latest_file_versions, role_sources_of
+from recon.profiles import reconciliation_type
 
 MAX_RECORDS = 12
 
@@ -38,7 +39,11 @@ def load_input(session: Session, case_id: uuid.UUID) -> LoadedCase | None:
     detail = get_case_detail(session, case_id)
     case = detail.case
     versions = latest_file_versions(session, case.profile_id, case.period)
-    found = source_records(session, versions, detail.records)
+    found = source_records(
+        session, versions, detail.records, role_sources_of(session, case.profile_id)
+    )
+    kind = reconciliation_type(get_profile(session, case.profile_id).reconciliation_type)
+    labels = {"invoice": kind.left_label, "payment": kind.right_label}
     records = [
         (role, found[(role, record_id)])
         for role, record_id in detail.records
@@ -54,6 +59,7 @@ def load_input(session: Session, case_id: uuid.UUID) -> LoadedCase | None:
             occurred_on=record.occurred_on,
             amount=Money(record.amount_minor, record.currency),
             text=record.free_text,
+            label=labels[role].lower(),
         )
         for index, (role, record) in enumerate(records, start=1)
     )

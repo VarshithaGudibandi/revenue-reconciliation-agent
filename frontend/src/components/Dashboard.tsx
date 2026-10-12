@@ -4,6 +4,7 @@ import { useCases, useMatches, useSummary } from "../api/hooks";
 import { useSearchParam } from "../lib/browser";
 import { formatCount, formatPeriod } from "../lib/formatters";
 import { KIND_LABELS, STATUS_LABELS, label } from "../lib/labels";
+import { LabelsProvider, capitalise, useTypeLabels } from "../lib/typeLabels";
 import { BarChart, type BarDatum } from "./BarChart";
 import { CaseDrawer } from "./CaseDrawer";
 import { CaseTable } from "./CaseTable";
@@ -54,7 +55,7 @@ export function Dashboard({ profileId, period }: { profileId: string; period: st
   if (summary.state !== "reconciled") {
     const message =
       summary.state === "no_files"
-        ? `There are no files for ${formatPeriod(period)} yet. Add the invoices and payments exports to start.`
+        ? `There are no files for ${formatPeriod(period)} yet. Add the ${summary.labels.left_plural} and ${summary.labels.right_plural} exports to start.`
         : summary.state === "waiting_for_files"
           ? "One of the two exports is still missing. Add it and the period is reconciled automatically."
           : "The latest files have not been reconciled yet.";
@@ -66,7 +67,7 @@ export function Dashboard({ profileId, period }: { profileId: string; period: st
   }
 
   return (
-    <>
+    <LabelsProvider value={summary.labels}>
       <Hero summary={summary} />
       <Tiles summary={summary} />
       <Charts summary={summary} refreshing={summaryQuery.isFetching} />
@@ -82,7 +83,7 @@ export function Dashboard({ profileId, period }: { profileId: string; period: st
         <ReconciledPanel profileId={profileId} period={period} caseId={caseId} onOpen={setCaseId} />
       )}
       {caseId ? <CaseDrawer caseId={caseId} onClose={() => setCaseId(null)} onOpenCase={setCaseId} /> : null}
-    </>
+    </LabelsProvider>
   );
 }
 
@@ -93,8 +94,8 @@ function Tiles({ summary }: { summary: NonNullable<ReturnType<typeof useSummary>
       <StatTile label="Fixes not confirmed" value={formatCount(summary.unverified_fixes)} note="reported fixed, still wrong" />
       <StatTile label="Accepted" value={formatCount(summary.status_counts.accepted ?? 0)} note="real differences" />
       <StatTile label="Resolved" value={formatCount(summary.status_counts.resolved ?? 0)} note="reconciled by the data" />
-      <StatTile label="Invoices" value={formatCount(summary.invoices)} />
-      <StatTile label="Payments" value={formatCount(summary.payments)} />
+      <StatTile label={capitalise(summary.labels.left_plural)} value={formatCount(summary.invoices)} />
+      <StatTile label={capitalise(summary.labels.right_plural)} value={formatCount(summary.payments)} />
     </div>
   );
 }
@@ -178,6 +179,7 @@ function AttentionPanel({
   caseId: string | null;
   onOpen: (id: string) => void;
 }) {
+  const labels = useTypeLabels();
   const [statuses, setStatuses] = useState<string[]>(["open", "fix_reported"]);
   const [kind, setKind] = useState("");
   const [search, setSearch] = useState("");
@@ -235,7 +237,7 @@ function AttentionPanel({
           <input
             className="input"
             type="search"
-            placeholder="Customer, invoice, payment or #case"
+            placeholder={`Customer, ${labels.left.toLowerCase()}, ${labels.right.toLowerCase()} or #case`}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setOffset(0); }}
           />
@@ -274,6 +276,7 @@ function ReconciledPanel({
   caseId: string | null;
   onOpen: (id: string) => void;
 }) {
+  const labels = useTypeLabels();
   const [view, setView] = useState<"matched" | "resolved">("matched");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -297,7 +300,7 @@ function ReconciledPanel({
           <span id="reconciled-view">Show</span>
           <div className="chips" role="group" aria-labelledby="reconciled-view">
             <button type="button" className="chip" aria-pressed={view === "matched"} onClick={() => { setView("matched"); setOffset(0); }}>
-              Matched invoices
+              Matched {labels.left_plural}
             </button>
             <button type="button" className="chip" aria-pressed={view === "resolved"} onClick={() => { setView("resolved"); setOffset(0); }}>
               Resolved cases
@@ -316,7 +319,9 @@ function ReconciledPanel({
         </label>
       </div>
       <div className={active.isFetching ? "refreshing" : undefined}>
-        {view === "matched" ? (
+        {active.isPending ? (
+          <p className="muted">Loading…</p>
+        ) : view === "matched" ? (
           <MatchTable rows={matches.data?.items ?? []} />
         ) : (
           <CaseTable rows={resolved.data?.items ?? []} selectedId={caseId} onOpen={onOpen} />

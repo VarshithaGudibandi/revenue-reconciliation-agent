@@ -27,6 +27,7 @@ from recon.api.schemas import (
     PeriodSummary,
     RecordOut,
     RunOut,
+    TypeLabels,
     amount_of,
 )
 from recon.api.suggestions import current_suggestion
@@ -43,12 +44,16 @@ from recon.persistence.models import (
     SourceFileVersion,
     SourceRecord,
 )
-from recon.persistence.repository import check_period, get_profile, latest_file_versions
+from recon.persistence.repository import (
+    check_period,
+    get_profile,
+    latest_file_versions,
+    role_sources_of,
+)
 from recon.persistence.runs import find_current_run
-from recon.profiles import RECONCILIATION_SOURCES
+from recon.profiles import reconciliation_type
 
 NEEDS_ATTENTION = ("open", "fix_reported")
-_ROLE_SOURCE = {"invoice": "invoices", "payment": "payments"}
 
 
 def list_profiles(session: Session) -> list[Profile]:
@@ -95,13 +100,26 @@ def list_periods(session: Session, profile_id: uuid.UUID) -> list[PeriodOut]:
     ]
 
 
+def type_labels(key: str) -> TypeLabels:
+    kind = reconciliation_type(key)
+    return TypeLabels(
+        type=kind.key,
+        title=kind.title,
+        left=kind.left_label,
+        left_plural=kind.left_plural,
+        right=kind.right_label,
+        right_plural=kind.right_plural,
+    )
+
+
 def period_summary(session: Session, profile_id: uuid.UUID, period: str) -> PeriodSummary:
     check_period(period)
     profile = get_profile(session, profile_id)
     versions = latest_file_versions(session, profile_id, period)
     run = find_current_run(session, profile_id, period)
 
-    needed = RECONCILIATION_SOURCES[profile.reconciliation_type]
+    rtype = reconciliation_type(profile.reconciliation_type)
+    needed = (rtype.left, rtype.right)
     if not versions:
         state: Literal["no_files", "waiting_for_files", "not_reconciled", "reconciled"] = "no_files"
     elif any(name not in versions for name in needed):
@@ -142,8 +160,8 @@ def period_summary(session: Session, profile_id: uuid.UUID, period: str) -> Peri
     ):
         totals[kind].append(amount_of(int(total), str(currency)))
 
-    invoices = versions["invoices"].record_count if "invoices" in versions else 0
-    payments = versions["payments"].record_count if "payments" in versions else 0
+    invoices = versions[rtype.left].record_count if rtype.left in versions else 0
+    payments = versions[rtype.right].record_count if rtype.right in versions else 0
     matched = 0
     if state == "reconciled" and run is not None:
         matched = (
@@ -155,6 +173,7 @@ def period_summary(session: Session, profile_id: uuid.UUID, period: str) -> Peri
     synced = session.get(CaseSync, (profile_id, period))
     return PeriodSummary(
         profile_id=profile_id,
+        labels=type_labels(rtype.key),
         period=period,
         state=state,
         files=[file_out(v) for v in versions.values()],
@@ -310,7 +329,8 @@ def list_case_page(
     offset: int,
 ) -> CasePage:
     check_period(period)
-    get_profile(session, profile_id)
+    profile_type = get_profile(session, profile_id).reconciliation_type
+    roles = role_sources_of(session, profile_id)
     versions = latest_file_versions(session, profile_id, period)
 
     conditions = [ExceptionCase.profile_id == profile_id, ExceptionCase.period == period]
@@ -319,7 +339,7 @@ def list_case_page(
     if kinds:
         conditions.append(ExceptionCase.kind.in_(list(kinds)))
     if search and search.strip():
-        conditions.append(_search_condition(search.strip(), versions))
+        conditions.append(_search_condition(search.strip(), versions, roles))
 
     total = session.scalar(select(func.count()).select_from(ExceptionCase).where(*conditions)) or 0
     orderings: dict[str, list[Any]] = {
@@ -338,11 +358,13 @@ def list_case_page(
     )
 
     refs = _case_refs(session, [case.id for case in cases])
-    found = source_records(session, versions, {r for rs in refs.values() for r in rs})
+    found = source_records(session, versions, {r for rs in refs.values() for r in rs}, roles)
     items = []
     for case in cases:
         facts = _facts_for(refs[case.id], found)
-        explanation = explain(case.kind, _variance(case), facts, case.proposed_invoice_id)
+        explanation = explain(
+            case.kind, _variance(case), facts, case.proposed_invoice_id, profile_type
+        )
         variance = _variance(case)
         items.append(
             CaseRow(
@@ -365,13 +387,13 @@ def list_case_page(
     return CasePage(total=total, items=items)
 
 
-def _search_condition(text: str, versions: dict[str, SourceFileVersion]):  # type: ignore[no-untyped-def]
+def _search_condition(text: str, versions: dict[str, SourceFileVersion], roles: dict[str, str]):  # type: ignore[no-untyped-def]
     """Cases with a record whose id or customer contains the text, or with that number."""
     pattern = _like(text)
     clauses = []
     if text.lstrip("#").isdigit():
         clauses.append(ExceptionCase.number == int(text.lstrip("#")))
-    for role, source in _ROLE_SOURCE.items():
+    for role, source in roles.items():
         version = versions.get(source)
         if version is None:
             continue
@@ -411,10 +433,13 @@ def case_detail_out(session: Session, case_id: uuid.UUID) -> CaseDetailOut:
     detail = get_case_detail(session, case_id)
     case = detail.case
     versions = latest_file_versions(session, case.profile_id, case.period)
-    found = source_records(session, versions, detail.records)
+    roles = role_sources_of(session, case.profile_id)
+    kind = reconciliation_type(get_profile(session, case.profile_id).reconciliation_type)
+    labels = {"invoice": kind.left_label, "payment": kind.right_label}
+    found = source_records(session, versions, detail.records, roles)
     facts = _facts_for(detail.records, found)
     variance = _variance(case)
-    explanation = explain(case.kind, variance, facts, case.proposed_invoice_id)
+    explanation = explain(case.kind, variance, facts, case.proposed_invoice_id, kind.key)
 
     records = []
     for (role, record_id), fact in zip(detail.records, facts, strict=True):
@@ -422,6 +447,7 @@ def case_detail_out(session: Session, case_id: uuid.UUID) -> CaseDetailOut:
         records.append(
             RecordOut(
                 role=role,
+                label=labels[role],
                 record_id=record_id,
                 customer=fact.customer,
                 occurred_on=None if record is None else record.occurred_on,

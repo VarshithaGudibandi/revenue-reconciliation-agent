@@ -1,15 +1,17 @@
 import type { PeriodSummary } from "../api/client";
 import { formatCount, formatPercent } from "../lib/formatters";
+import { capitalise } from "../lib/typeLabels";
 
 /** The one number the page leads with: how much of the period reconciles. */
 export function Hero({ summary }: { summary: PeriodSummary }) {
   const rate = summary.reconciliation_rate ?? 0;
+  const { left_plural: left, right_plural: right } = summary.labels;
   return (
     <section className="card hero" aria-label="Reconciliation rate">
       <div>
         <div className="hero-figure">{formatPercent(summary.reconciliation_rate)}</div>
         <p className="hero-caption">
-          of {formatCount(summary.invoices)} invoices reconcile with their payments
+          of {formatCount(summary.invoices)} {left} reconcile with their {right}
         </p>
       </div>
       <div>
@@ -19,7 +21,7 @@ export function Hero({ summary }: { summary: PeriodSummary }) {
           aria-valuemin={0}
           aria-valuemax={summary.invoices}
           aria-valuenow={summary.matched_invoices}
-          aria-label="Invoices reconciled"
+          aria-label={`${capitalise(left)} reconciled`}
         >
           <div className="meter-fill" style={{ width: `${rate * 100}%` }} />
         </div>

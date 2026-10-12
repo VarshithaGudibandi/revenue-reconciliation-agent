@@ -26,7 +26,7 @@ from recon.ingestion.normalize import (
 )
 from recon.persistence.models import Profile, SourceFileVersion, SourceRecord
 from recon.persistence.models import RejectedRow as RejectedRowModel
-from recon.profiles import RECONCILIATION_SOURCES, ProfileConfig
+from recon.profiles import RECONCILIATION_SOURCES, ProfileConfig, role_sources
 
 _PERIOD = re.compile(r"[0-9]{4}-(0[1-9]|1[0-2])")
 _INSERT_CHUNK = 5_000
@@ -78,6 +78,11 @@ def create_profile(
             raise ProfileExistsError(f"a profile named {name!r} already exists") from error
         raise
     return profile
+
+
+def role_sources_of(session: Session, profile_id: uuid.UUID) -> dict[str, str]:
+    """The file each stored role (``invoice``, ``payment``) reads from, for a profile's type."""
+    return role_sources(get_profile(session, profile_id).reconciliation_type)
 
 
 def get_profile(session: Session, profile_id: uuid.UUID) -> Profile:

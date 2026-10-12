@@ -179,7 +179,7 @@ export function CaseDrawer({
                     {data.records.map((r) => (
                       <tr key={`${r.role}-${r.record_id}`}>
                         <td>
-                          <span className="muted">{r.role === "invoice" ? "Invoice" : "Payment"}</span>{" "}
+                          <span className="muted">{r.label}</span>{" "}
                           <span className="mono">{r.record_id}</span>
                           {r.text ? <div className="chart-sub record-text">{r.text}</div> : null}
                         </td>

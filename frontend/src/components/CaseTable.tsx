@@ -1,5 +1,6 @@
 import type { CaseRow } from "../api/client";
 import { formatDateTime } from "../lib/formatters";
+import { capitalise, useTypeLabels } from "../lib/typeLabels";
 import { KindLabel, StatusBadge } from "./Badges";
 
 function Ids({ ids }: { ids: string[] }) {
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function CaseTable({ rows, selectedId, onOpen }: Props) {
+  const labels = useTypeLabels();
   if (rows.length === 0) {
     return <p className="empty">No cases match these filters.</p>;
   }
@@ -31,8 +33,8 @@ export function CaseTable({ rows, selectedId, onOpen }: Props) {
             <th scope="col">Case</th>
             <th scope="col">Problem</th>
             <th scope="col">Customer</th>
-            <th scope="col">Invoices</th>
-            <th scope="col">Payments</th>
+            <th scope="col">{capitalise(labels.left_plural)}</th>
+            <th scope="col">{capitalise(labels.right_plural)}</th>
             <th scope="col" className="num">
               Difference
             </th>

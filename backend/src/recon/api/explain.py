@@ -47,6 +47,7 @@ def explain(
     variance: Money | None,
     records: Sequence[RecordFacts],
     proposed_invoice_id: str | None,
+    reconciliation_type: str = "invoice_payment",
 ) -> Explanation:
     invoices = [r for r in records if r.role == "invoice"]
     payments = [r for r in records if r.role == "payment"]
@@ -118,6 +119,11 @@ def explain(
                 f"to {proposed_invoice_id or invoice.record_id} in the source system.",
             ),
         )
+    if reconciliation_type == "payout_deposit":
+        batch = _explain_deposits(kind, variance, gap, invoice, payments, invoices, who)
+        if batch is not None:
+            return batch
+
     if kind == "currency_mismatch" and invoice:
         return Explanation(
             f"Invoice {invoice.record_id} was paid in a different currency.",
@@ -139,3 +145,85 @@ def explain(
             ),
         )
     return Explanation(f"{kind.replace('_', ' ').capitalize()}.", "", ())
+
+
+def _explain_deposits(
+    kind: str,
+    variance: Money | None,
+    gap: str,
+    deposit: RecordFacts | None,
+    payouts: Sequence[RecordFacts],
+    deposits: Sequence[RecordFacts],
+    who: str,
+) -> Explanation | None:
+    """Readings for bank deposits against payouts. The deposit is the record stored as the
+    ``invoice`` side and its payouts are the ``payment`` side."""
+    if kind == "missing_payouts" and deposit:
+        return Explanation(
+            f"Deposit {deposit.record_id} of {_money(deposit.amount)} has no payouts that "
+            "explain it.",
+            "No payout names this deposit, and no set of payouts from the same account paid out in "
+            "the ten days before it adds up to its amount.",
+            (
+                "Check whether the payouts were reported under another account or in a later "
+                "export.",
+                "If the deposit is not from a processor (a transfer, interest), note it and accept "
+                "the variance.",
+            ),
+        )
+    if kind == "undeposited_payout" and payouts:
+        payout = payouts[0]
+        return Explanation(
+            f"Payout {payout.record_id} of {_money(payout.amount)} is in no deposit.",
+            "It names no deposit in the bank export, or names one that is not there, and no "
+            "deposit is made up of it.",
+            (
+                "Check whether its deposit falls in a later period or has not arrived yet.",
+                "If the payout was cancelled or sent to another account, note it and accept the "
+                "variance.",
+            ),
+        )
+    if kind == "deposit_mismatch" and deposit:
+        direction = "short of" if variance and variance.minor < 0 else "more than"
+        return Explanation(
+            f"Deposit {deposit.record_id} is {gap} {direction} its payouts.",
+            f"The deposit is {_money(deposit.amount)} and its payouts ({_ids(payouts)}) total "
+            f"{_money(_total(payouts))}.",
+            (
+                "Check for a fee, reserve or adjustment that the processor took or released.",
+                "If the processor's report is wrong, correct it at the source.",
+            ),
+        )
+    if kind == "proposed_grouping" and deposit:
+        return Explanation(
+            f"Deposit {deposit.record_id} probably holds payouts {_ids(payouts)}, but nothing "
+            "says so.",
+            f"Those payouts from {who} were paid out in the ten days before the deposit and add up "
+            "to its amount, and no other deposit could use them. The grouping is a proposal; it "
+            "has not been applied.",
+            (
+                f"Confirm it against the processor's report, then put {deposit.record_id} in the "
+                "reference of those payouts at the source.",
+            ),
+        )
+    if kind == "ambiguous_grouping":
+        return Explanation(
+            f"Deposit {_ids(deposits)} could be made up of the payouts in more than one way.",
+            f"Payouts {_ids(payouts)} from {who} can be combined to the same amount in several "
+            "ways, so the data cannot say which belong to which deposit. No grouping is proposed.",
+            (
+                "Use the processor's report to find which payouts each deposit carries.",
+                "Put the deposit's id in the reference of its payouts at the source.",
+            ),
+        )
+    if kind == "currency_mismatch" and deposit:
+        return Explanation(
+            f"Deposit {deposit.record_id} is in a different currency than its payouts.",
+            f"The deposit is {_money(deposit.amount)} and payouts {_ids(payouts)} total "
+            f"{_money(_total(payouts))}. There is no exchange rate to compare them.",
+            (
+                "Convert at the rate the bank applied and check the amounts agree.",
+                "If the payout currency is wrong in the processor's report, correct it there.",
+            ),
+        )
+    return None

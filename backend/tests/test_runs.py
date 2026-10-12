@@ -4,9 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-import recon.persistence.runs as runs_module
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.engine.reconcile import reconcile
+from recon.engine.registry import ENGINES
 from recon.evaluation.score import records_from_dataset, score
 from recon.persistence.models import (
     Profile,
@@ -135,7 +135,7 @@ def test_executing_a_finished_run_again_does_nothing(
     def refuse(*_: object, **__: object) -> None:
         raise AssertionError("a finished run must not be recomputed")
 
-    monkeypatch.setattr(runs_module, "reconcile", refuse)
+    monkeypatch.setitem(ENGINES, "invoice_payment", refuse)
     again = run_reconciliation(env.sessions, run_id)
 
     assert again == first
@@ -153,7 +153,7 @@ def test_a_failed_run_records_the_error_stores_nothing_and_can_be_retried(
     def broken(*_: object, **__: object) -> None:
         raise RuntimeError("engine exploded")
 
-    monkeypatch.setattr(runs_module, "reconcile", broken)
+    monkeypatch.setitem(ENGINES, "invoice_payment", broken)
     with pytest.raises(RuntimeError, match="engine exploded"):
         run_reconciliation(env.sessions, run_id)
 
@@ -163,7 +163,7 @@ def test_a_failed_run_records_the_error_stores_nothing_and_can_be_retried(
     assert failed.error is not None and "RuntimeError: engine exploded" in failed.error
     assert (count(env, ResultMatch), count(env, ResultException)) == (0, 0)
 
-    monkeypatch.setattr(runs_module, "reconcile", real_reconcile)
+    monkeypatch.setitem(ENGINES, "invoice_payment", real_reconcile)
     retried = run_reconciliation(env.sessions, run_id)
     assert (retried.status, retried.error) == ("succeeded", None)
     with env.sessions() as session:
@@ -182,7 +182,7 @@ def test_concurrent_executions_do_the_work_once(env: Env, monkeypatch: pytest.Mo
         calls.append(1)
         return real_reconcile(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(runs_module, "reconcile", counting)
+    monkeypatch.setitem(ENGINES, "invoice_payment", counting)
 
     def execute(_: int) -> str:
         barrier.wait()

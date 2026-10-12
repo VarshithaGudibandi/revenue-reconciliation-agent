@@ -21,6 +21,8 @@ class RecordView:
     occurred_on: date | None
     amount: Money | None
     text: str | None
+    # What a person calls the record (Deposit, Payout); the model is shown it instead of the role.
+    label: str = ""
 
 
 @dataclass(frozen=True)

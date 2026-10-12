@@ -7,6 +7,11 @@ export const KIND_LABELS: Record<string, string> = {
   misreferenced_payment: "Wrong reference",
   currency_mismatch: "Currency mismatch",
   ambiguous_payment: "Ambiguous payment",
+  deposit_mismatch: "Deposit mismatch",
+  missing_payouts: "Deposit without payouts",
+  undeposited_payout: "Payout not deposited",
+  proposed_grouping: "Payouts probably in a deposit",
+  ambiguous_grouping: "Ambiguous grouping",
 };
 
 export const STATUS_LABELS: Record<string, string> = {

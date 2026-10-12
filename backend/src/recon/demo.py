@@ -14,6 +14,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from recon.config import Settings
+from recon.datagen.batches import (
+    DEPOSIT_MAPPING,
+    PAYOUT_MAPPING,
+    BatchConfig,
+    generate_batches,
+    write_batches,
+)
 from recon.datagen.generate import Config, apply_corrections, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.writer import write_dataset
@@ -24,6 +31,7 @@ from recon.pipeline import PeriodOutcome, reconcile_period
 from recon.profiles import ProfileConfig
 
 DEMO_PROFILE = "Demo: invoices and payments"
+DEMO_BATCH_PROFILE = "Demo: payouts and deposits"
 DEMO_PERIOD = "2026-01"
 DEMO_SEED = 7
 
@@ -111,6 +119,39 @@ def seed_demo(sessions: sessionmaker[Session], storage_dir: Path) -> uuid.UUID:
     return profile_id
 
 
+def seed_batch_demo(sessions: sessionmaker[Session], storage_dir: Path) -> uuid.UUID:
+    """Create a second demo profile, bank deposits against processor payouts, and reconcile it.
+    Safe to run again."""
+    directory = storage_dir / "demo" / "batches"
+    write_batches(
+        generate_batches(BatchConfig(seed=DEMO_SEED, period=DEMO_PERIOD, deposits=120)), directory
+    )
+    with sessions.begin() as session:
+        profile = session.scalars(select(Profile).where(Profile.name == DEMO_BATCH_PROFILE)).first()
+        if profile is None:
+            profile = create_profile(
+                session,
+                name=DEMO_BATCH_PROFILE,
+                reconciliation_type="payout_deposit",
+                config=ProfileConfig(
+                    sources={"deposits": DEPOSIT_MAPPING, "payouts": PAYOUT_MAPPING}
+                ),
+            )
+        profile_id = profile.id
+        if not latest_file_versions(session, profile_id, DEMO_PERIOD):
+            for source in ("deposits", "payouts"):
+                register_file(
+                    session,
+                    profile_id=profile_id,
+                    source_name=source,
+                    period=DEMO_PERIOD,
+                    path=directory / f"{source}.csv",
+                    object_key=f"demo/batches/{source}.csv",
+                )
+    reconcile_period(sessions, profile_id, DEMO_PERIOD)
+    return profile_id
+
+
 def register_corrected_export(
     sessions: sessionmaker[Session], storage_dir: Path, profile_id: uuid.UUID
 ) -> None:
@@ -140,8 +181,11 @@ def load_corrected_export(
 def main() -> None:
     settings = Settings()
     engine = create_db_engine(settings.database_url)
-    profile_id = seed_demo(sessionmaker(engine), settings.storage_dir)
+    sessions = sessionmaker(engine)
+    profile_id = seed_demo(sessions, settings.storage_dir)
     print(f"demo profile {profile_id}, period {DEMO_PERIOD}")
+    batch_id = seed_batch_demo(sessions, settings.storage_dir)
+    print(f"demo profile {batch_id} (deposits and payouts), period {DEMO_PERIOD}")
     engine.dispose()
 
 

@@ -1,22 +1,24 @@
 import type { MatchRow } from "../api/client";
 import { formatDate } from "../lib/formatters";
+import { capitalise, dateHeading, settledHeading, useTypeLabels } from "../lib/typeLabels";
 
 export function MatchTable({ rows }: { rows: MatchRow[] }) {
-  if (rows.length === 0) return <p className="empty">No matched invoices to show.</p>;
+  const labels = useTypeLabels();
+  if (rows.length === 0) return <p className="empty">No matched {labels.left_plural} to show.</p>;
   return (
     <div className="table-wrap">
       <table className="table">
         <thead>
           <tr>
-            <th scope="col">Invoice</th>
+            <th scope="col">{labels.left}</th>
             <th scope="col">Customer</th>
-            <th scope="col">Issued</th>
+            <th scope="col">{dateHeading(labels)}</th>
             <th scope="col" className="num">
-              Invoice amount
+              {labels.left} amount
             </th>
-            <th scope="col">Payments</th>
+            <th scope="col">{capitalise(labels.right_plural)}</th>
             <th scope="col" className="num">
-              Paid
+              {settledHeading(labels)}
             </th>
             <th scope="col" className="num">
               Difference

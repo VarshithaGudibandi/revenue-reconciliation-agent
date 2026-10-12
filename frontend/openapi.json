@@ -1567,6 +1567,7 @@
         "type": "object"
       },
       "PeriodSummary": {
+        "description": "``invoices``, ``payments`` and ``matched_invoices`` count the left file, the right file\nand the left records that reconciled, whatever the type; ``labels`` says what they are.",
         "properties": {
           "by_kind": {
             "items": {
@@ -1589,6 +1590,9 @@
           "invoices": {
             "title": "Invoices",
             "type": "integer"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/TypeLabels"
           },
           "matched_invoices": {
             "title": "Matched Invoices",
@@ -1656,6 +1660,7 @@
         },
         "required": [
           "profile_id",
+          "labels",
           "period",
           "state",
           "files",
@@ -1872,6 +1877,7 @@
         "type": "object"
       },
       "RecordOut": {
+        "description": "``role`` is the side of the match whatever the type (``invoice`` is the one record,\n``payment`` one of the several that settle it); ``label`` is what to call it: Invoice,\nPayment, Deposit or Payout.",
         "properties": {
           "amount": {
             "anyOf": [
@@ -1897,6 +1903,10 @@
           "in_current_files": {
             "title": "In Current Files",
             "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
           },
           "occurred_on": {
             "anyOf": [
@@ -1936,6 +1946,7 @@
         },
         "required": [
           "role",
+          "label",
           "record_id",
           "customer",
           "occurred_on",
@@ -2195,6 +2206,45 @@
           "model"
         ],
         "title": "ToolOut",
+        "type": "object"
+      },
+      "TypeLabels": {
+        "description": "How to talk about the two sides of a type of reconciliation.",
+        "properties": {
+          "left": {
+            "title": "Left",
+            "type": "string"
+          },
+          "left_plural": {
+            "title": "Left Plural",
+            "type": "string"
+          },
+          "right": {
+            "title": "Right",
+            "type": "string"
+          },
+          "right_plural": {
+            "title": "Right Plural",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "left",
+          "left_plural",
+          "right",
+          "right_plural"
+        ],
+        "title": "TypeLabels",
         "type": "object"
       },
       "UploadOut": {

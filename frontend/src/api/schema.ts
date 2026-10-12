@@ -1091,7 +1091,11 @@ export interface components {
             /** Period */
             period: string;
         };
-        /** PeriodSummary */
+        /**
+         * PeriodSummary
+         * @description ``invoices``, ``payments`` and ``matched_invoices`` count the left file, the right file
+         *     and the left records that reconciled, whatever the type; ``labels`` says what they are.
+         */
         PeriodSummary: {
             /** By Kind */
             by_kind: components["schemas"]["KindTotal"][];
@@ -1101,6 +1105,7 @@ export interface components {
             files: components["schemas"]["FileOut"][];
             /** Invoices */
             invoices: number;
+            labels: components["schemas"]["TypeLabels"];
             /** Matched Invoices */
             matched_invoices: number;
             /** Needs Attention */
@@ -1202,13 +1207,20 @@ export interface components {
              */
             status: "proposed" | "confirmed";
         };
-        /** RecordOut */
+        /**
+         * RecordOut
+         * @description ``role`` is the side of the match whatever the type (``invoice`` is the one record,
+         *     ``payment`` one of the several that settle it); ``label`` is what to call it: Invoice,
+         *     Payment, Deposit or Payout.
+         */
         RecordOut: {
             amount: components["schemas"]["Amount"] | null;
             /** Customer */
             customer: string | null;
             /** In Current Files */
             in_current_files: boolean;
+            /** Label */
+            label: string;
             /** Occurred On */
             occurred_on: string | null;
             /** Record Id */
@@ -1297,6 +1309,24 @@ export interface components {
             model: string | null;
             /** Name */
             name: string;
+        };
+        /**
+         * TypeLabels
+         * @description How to talk about the two sides of a type of reconciliation.
+         */
+        TypeLabels: {
+            /** Left */
+            left: string;
+            /** Left Plural */
+            left_plural: string;
+            /** Right */
+            right: string;
+            /** Right Plural */
+            right_plural: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
         };
         /**
          * UploadOut

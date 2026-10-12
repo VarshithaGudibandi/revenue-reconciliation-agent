@@ -27,9 +27,10 @@ from recon.engine.model import (
     ReconciliationException,
     ReconciliationResult,
 )
-from recon.engine.reconcile import reconcile
+from recon.engine.registry import Engine, engine_for
 from recon.ingestion.diff import diff_fingerprints
 from recon.persistence.models import (
+    Profile,
     ResultException,
     ResultExceptionRecord,
     ResultMatch,
@@ -46,7 +47,7 @@ from recon.persistence.repository import (
     load_fingerprints,
     load_records,
 )
-from recon.profiles import RECONCILIATION_SOURCES, ProfileConfig
+from recon.profiles import RECONCILIATION_SOURCES, ProfileConfig, reconciliation_type
 
 _ERROR_LIMIT = 2_000
 
@@ -234,20 +235,24 @@ def _execute(session: Session, run_id: uuid.UUID, mode: str, verify: bool) -> No
     run = session.get_one(Run, run_id)
     versions = run_versions(session, run_id)
     engine_config = ProfileConfig.model_validate(run.config_snapshot).engine_config()
+    profile = session.get_one(Profile, run.profile_id)
+    kind = reconciliation_type(profile.reconciliation_type)
+    engine = engine_for(kind.key)
+    left, right = kind.left, kind.right
 
     base = _find_base_run(session, run) if mode == "auto" else None
     if base is None:
-        invoices = load_records(session, versions["invoices"].id)
-        payments = load_records(session, versions["payments"].id)
-        result = reconcile(invoices, payments, engine_config)
-        total = len({record.counterparty for record in (*invoices, *payments)})
+        left_records = load_records(session, versions[left].id)
+        right_records = load_records(session, versions[right].id)
+        result = engine(left_records, right_records, engine_config)
+        total = len({record.counterparty for record in (*left_records, *right_records)})
         recomputed = total
     else:
         result, total, recomputed = _reconcile_incrementally(
-            session, base, versions, engine_config, verify
+            session, base, versions, engine_config, verify, (left, right), engine
         )
 
-    _save_result(session, run_id, versions["invoices"].id, versions["payments"].id, result)
+    _save_result(session, run_id, versions[left].id, versions[right].id, result)
     session.execute(
         update(Run)
         .where(Run.id == run_id)
@@ -295,13 +300,16 @@ def _reconcile_incrementally(
     versions: dict[str, SourceFileVersion],
     config: EngineConfig,
     verify: bool,
+    sides: tuple[str, str],
+    engine: Engine,
 ) -> tuple[ReconciliationResult, int, int]:
+    left, right = sides
     base_versions = run_versions(session, base.id)
 
     dirty: set[str] = set()
     present: set[str] = set()
     counterparties: dict[str, dict[str, str]] = {}
-    for source in ("invoices", "payments"):
+    for source in sides:
         old = load_fingerprints(session, base_versions[source].id)
         new = load_fingerprints(session, versions[source].id)
         dirty |= diff_fingerprints(old, new).counterparties
@@ -311,23 +319,23 @@ def _reconcile_incrementally(
         counterparties[source] = {f.record_id: f.counterparty for f in old}
         counterparties[source].update({f.record_id: f.counterparty for f in new})
 
-    recomputed = reconcile(
-        load_records(session, versions["invoices"].id, dirty),
-        load_records(session, versions["payments"].id, dirty),
+    recomputed = engine(
+        load_records(session, versions[left].id, dirty),
+        load_records(session, versions[right].id, dirty),
         config,
     )
     result = merge_incremental(
         load_result(session, base.id),
-        counterparties["invoices"],
-        counterparties["payments"],
+        counterparties[left],
+        counterparties[right],
         dirty,
         recomputed,
     )
 
     if verify:
-        full = reconcile(
-            load_records(session, versions["invoices"].id),
-            load_records(session, versions["payments"].id),
+        full = engine(
+            load_records(session, versions[left].id),
+            load_records(session, versions[right].id),
             config,
         )
         if full != result:

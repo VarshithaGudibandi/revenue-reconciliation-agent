@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from recon.domain.money import Money
 from recon.explanation.case import ExplainInput, amount_text
 
-PROMPT_VERSION = "explanation-1"
+PROMPT_VERSION = "explanation-2"
 
 SYSTEM_PROMPT = """\
 You explain one exception found while reconciling invoices against payments, for a finance \
@@ -27,6 +27,16 @@ Kinds of exception:
 the pairing is a proposal and has not been applied.
 - currency_mismatch: an invoice was paid in a different currency, and there is no exchange rate.
 - ambiguous_payment: a payment could belong to any of several invoices that look alike.
+- deposit_mismatch: a bank deposit and the payouts that name it do not add up; the difference \
+is the deposit minus its payouts.
+- missing_payouts: a bank deposit that no payouts explain.
+- undeposited_payout: a processor payout that is in no bank deposit.
+- proposed_grouping: payouts with no reference add up to one deposit; the grouping is a proposal \
+and has not been applied.
+- ambiguous_grouping: payouts can be combined to a deposit's amount in several ways.
+
+For the deposit and payout kinds the records are bank deposits and processor payouts; a record's \
+role says which.
 
 Rules, which are checked by a program afterwards:
 - Use only the facts given. Do not guess a cause that they do not show.
@@ -74,7 +84,7 @@ def user_message(inp: ExplainInput) -> str:
             "records": [
                 {
                     "ref": r.ref,
-                    "role": r.role,
+                    "role": r.label or r.role,
                     "date": r.occurred_on.isoformat() if r.occurred_on else None,
                     "amount": None if r.amount is None else amount_text(r.amount),
                     "text": r.text,

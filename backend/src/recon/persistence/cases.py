@@ -28,11 +28,10 @@ from recon.persistence.models import (
     Run,
     SourceRecord,
 )
-from recon.persistence.repository import check_period
+from recon.persistence.repository import check_period, role_sources_of
 from recon.persistence.runs import find_current_run, load_result, run_versions
 
 _IN_CHUNK = 10_000
-_ROLE_SOURCE = {"invoice": "invoices", "payment": "payments"}
 
 
 @dataclass
@@ -69,6 +68,7 @@ def sync_cases(session: Session, profile_id: uuid.UUID, period: str) -> SyncSumm
 
     result = load_result(session, run.id)
     versions = run_versions(session, run.id)
+    role_source = role_sources_of(session, profile_id)
     exception_refs = [_refs(e) for e in result.exceptions]
 
     cases = list(
@@ -88,7 +88,7 @@ def sync_cases(session: Session, profile_id: uuid.UUID, period: str) -> SyncSumm
 
     all_refs = {ref for refs in exception_refs for ref in refs}
     hashes = _content_hashes(
-        session, {role: versions[name].id for role, name in _ROLE_SOURCE.items()}, all_refs
+        session, {role: versions[name].id for role, name in role_source.items()}, all_refs
     )
 
     summary = SyncSummary(run.id, applied=True)
@@ -123,7 +123,7 @@ def sync_cases(session: Session, profile_id: uuid.UUID, period: str) -> SyncSumm
             members,
             owner_of,
             result,
-            {role: versions[name].id for role, name in _ROLE_SOURCE.items()},
+            {role: versions[name].id for role, name in role_source.items()},
             run,
             summary,
         )
