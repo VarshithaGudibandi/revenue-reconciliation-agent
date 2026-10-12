@@ -1,23 +1,20 @@
 """What each kind of job does."""
 
+import logging
 import uuid
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from recon.config import Settings
+from recon.ingest.scan import scan_bucket
+from recon.ingest.store import ObjectStore
+from recon.jobs.kinds import RECONCILE_PERIOD, SCAN_BUCKET
 from recon.jobs.worker import Handler, Permanent, Retry
 from recon.persistence.repository import check_period
 from recon.pipeline import reconcile_period
 
-RECONCILE_PERIOD = "reconcile_period"
-
-
-def reconcile_key(profile_id: uuid.UUID, period: str) -> str:
-    return f"{profile_id}/{period}"
-
-
-def reconcile_payload(profile_id: uuid.UUID, period: str) -> dict[str, Any]:
-    return {"profile_id": str(profile_id), "period": period}
+log = logging.getLogger("recon.worker")
 
 
 def handle_reconcile(sessions: sessionmaker[Session]) -> Handler:
@@ -38,5 +35,31 @@ def handle_reconcile(sessions: sessionmaker[Session]) -> Handler:
     return handle
 
 
-def handlers_for(sessions: sessionmaker[Session]) -> dict[str, Handler]:
-    return {RECONCILE_PERIOD: handle_reconcile(sessions)}
+def handle_scan(sessions: sessionmaker[Session], store: ObjectStore, settings: Settings) -> Handler:
+    """Register the files that have arrived in the bucket, and queue the periods they complete."""
+
+    def handle(payload: dict[str, Any]) -> dict[str, Any]:
+        result = scan_bucket(
+            sessions,
+            store,
+            prefix=settings.s3_prefix,
+            storage_dir=settings.storage_dir,
+            max_bytes=settings.max_upload_mb * 1024 * 1024,
+            max_attempts=settings.job_max_attempts,
+        )
+        for reason in result.reasons[:20]:
+            log.info("not ingested: %s", reason)
+        return result.as_dict()
+
+    return handle
+
+
+def handlers_for(
+    sessions: sessionmaker[Session],
+    store: ObjectStore | None = None,
+    settings: Settings | None = None,
+) -> dict[str, Handler]:
+    handlers = {RECONCILE_PERIOD: handle_reconcile(sessions)}
+    if store is not None and settings is not None:
+        handlers[SCAN_BUCKET] = handle_scan(sessions, store, settings)
+    return handlers

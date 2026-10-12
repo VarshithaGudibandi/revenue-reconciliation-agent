@@ -98,3 +98,46 @@ jobs:
       - name: Stop the stack
         if: always()
         run: docker compose down --volumes
+
+  ingestion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stack with the bucket and the ingesting worker
+        run: docker compose --profile s3 up -d --build
+      - name: Wait for the backend to report ready
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health/ready; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --profile s3 ps
+          docker compose --profile s3 logs
+          exit 1
+      - name: Drop a month of files in the bucket
+        run: |
+          docker compose --profile s3 exec -T \
+            -e AWS_ACCESS_KEY_ID=recon -e AWS_SECRET_ACCESS_KEY=recon-local-secret \
+            backend python - <<'PY'
+          import boto3
+          s3 = boto3.client("s3", endpoint_url="http://s3:8333", region_name="us-east-1")
+          for source in ("invoices", "payments"):
+              s3.upload_file(f"/data/demo/first/{source}.csv", "recon", f"demo-invoices-and-payments/2026-02/{source}.csv")
+          PY
+      - name: Wait for the period to be registered and reconciled
+        run: |
+          profile=$(curl --fail --silent http://127.0.0.1:8000/api/profiles | jq -r '.[0].id')
+          for attempt in $(seq 1 40); do
+            state=$(curl --silent "http://127.0.0.1:8000/api/profiles/$profile/periods/2026-02/summary" | jq -r '.state // empty')
+            if [ "$state" = "reconciled" ]; then
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose --profile s3 logs ingest-worker worker
+          exit 1
+      - name: Stop the stack
+        if: always()
+        run: docker compose --profile s3 down --volumes

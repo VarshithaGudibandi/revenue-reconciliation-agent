@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,3 +34,12 @@ class Settings(BaseSettings):
     job_lease_seconds: float = 60.0
     job_heartbeat_seconds: float = 15.0
     job_poll_seconds: float = 1.0
+    # Files dropped in an S3-compatible bucket are registered by a worker that scans it. Ingestion
+    # is on when a bucket is named. Without explicit keys the usual AWS environment is used.
+    s3_bucket: str | None = None
+    s3_endpoint_url: str | None = None
+    s3_region: str = "us-east-1"
+    s3_access_key: str | None = None
+    s3_secret_key: SecretStr | None = None
+    s3_prefix: str = ""
+    s3_poll_seconds: float = 30.0

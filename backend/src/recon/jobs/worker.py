@@ -13,7 +13,7 @@ import os
 import socket
 import threading
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -45,6 +45,18 @@ def _default_name() -> str:
     return f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
 
 
+@dataclass(frozen=True)
+class Periodic:
+    """Work that comes round on a timer: a job of this kind is queued every ``every``. Several
+    workers may each queue it; jobs for the same key that are still waiting count as one."""
+
+    kind: str
+    dedupe_key: str
+    payload: dict[str, Any]
+    every: timedelta
+    max_attempts: int = 3
+
+
 @dataclass
 class Worker:
     sessions: sessionmaker[Session]
@@ -55,11 +67,30 @@ class Worker:
     poll_seconds: float = 1.0
     clock: Callable[[], datetime] = _utc
     backoff: Callable[[int], float] = queue.backoff_seconds
+    periodic: Sequence[Periodic] = ()
+    _queued_at: dict[str, datetime] = field(default_factory=dict, init=False, repr=False)
+
+    def _queue_periodic(self, session: Session, now: datetime) -> None:
+        for item in self.periodic:
+            key = f"{item.kind}/{item.dedupe_key}"
+            last = self._queued_at.get(key)
+            if last is not None and now - last < item.every:
+                continue
+            queue.enqueue(
+                session,
+                item.kind,
+                item.dedupe_key,
+                item.payload,
+                now=now,
+                max_attempts=item.max_attempts,
+            )
+            self._queued_at[key] = now
 
     def run_once(self) -> Outcome | None:
         """Take one due job and run it. None if there was nothing to do."""
         now = self.clock()
         with self.sessions.begin() as session:
+            self._queue_periodic(session, now)
             recovered = queue.recover_expired(session, now=now)
             claimed = queue.claim(session, self.name, now=now, lease=self.lease)
         if recovered:

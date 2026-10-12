@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from recon.api.schemas import JobOut, RunOut, SyncOut
 from recon.config import Settings
 from recon.jobs import queue
-from recon.jobs.handlers import RECONCILE_PERIOD, reconcile_key, reconcile_payload
+from recon.jobs.kinds import enqueue_reconcile
 from recon.persistence.models import Job
 from recon.pipeline import PeriodOutcome, reconcile_period
 
@@ -62,11 +62,10 @@ def dispatch_reconcile(
         run, cases = outcome_out(reconcile_period(sessions, profile_id, period))
         return Dispatched(run, cases, None)
     with sessions.begin() as session:
-        job, _ = queue.enqueue(
+        job = enqueue_reconcile(
             session,
-            RECONCILE_PERIOD,
-            reconcile_key(profile_id, period),
-            reconcile_payload(profile_id, period),
+            profile_id,
+            period,
             now=datetime.now(UTC),
             max_attempts=settings.job_max_attempts,
         )

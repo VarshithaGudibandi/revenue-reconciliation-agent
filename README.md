@@ -67,6 +67,30 @@ The queue is a table in Postgres (`job`, `recon/jobs/queue.py`) and the worker i
 
 What is not covered: a handler cannot be cancelled, so a worker that lost its job still runs it to the end. Times come from the workers' clocks, so the lease has to be much longer than their clock error. There is one queue and no priorities. The wait for a result in the dashboard is a poll once a second.
 
+## Files from a bucket
+
+A worker can watch an S3-compatible bucket and register the files that arrive, so an export can be dropped in a bucket instead of uploaded through the screen. It is on when `RECON_S3_BUCKET` is set (with `RECON_S3_ENDPOINT_URL` for anything other than AWS, `RECON_S3_ACCESS_KEY`, `RECON_S3_SECRET_KEY`, `RECON_S3_PREFIX` and `RECON_S3_POLL_SECONDS`, 30).
+
+A key says where the file belongs:
+
+```text
+<prefix><profile>/<YYYY-MM>/<source>[-anything].csv      spanish-erp-and-bank/2026-01/payments-2026-01-31.csv
+```
+
+`<profile>` is the profile's name in lower case with each run of other characters turned into one hyphen, and `<source>` is `invoices` or `payments`. Anything after the source name and before `.csv` is free, so a re-export under a new name works.
+
+The worker queues a `scan_bucket` job every poll interval (several workers may do so; waiting duplicates count as one). A scan lists the bucket and, for each object it has not dealt with, finds the profile, downloads the object and registers it as a file version, exactly as an upload does. When that completes a period it queues the reconciliation. What was done with each object is kept in `ingested_object`, keyed by key and ETag:
+
+- an object is read once per ETag, so a second scan reads nothing it already has, and an overwritten object is new;
+- the same bytes under a new ETag (a re-upload) are noted as unchanged and change nothing;
+- a file that cannot be read with the profile's mapping is recorded as failed with the reason and is not tried again until the object changes;
+- an object that cannot be placed (the name does not fit, no such profile, no such source, two profiles with the same slug, too large) is recorded as skipped with the reason, and is looked at again on every scan, so a file dropped before its profile exists is picked up when the profile is created;
+- if the store fails in the middle of a scan the job fails and is retried; what was already registered stays.
+
+`uv run pytest tests/test_ingest.py` (in `backend`) runs the naming, the scan against an in-memory store, a worker running scans on a timer, and the S3 client over HTTP against an in-process S3 server (moto), including a listing of more than one page. `docker compose --profile s3 up --build` adds SeaweedFS, a bucket named `recon`, and a worker that ingests from it (the keys in `docker-compose.yml` are for that local stack only). MinIO's community images are no longer published, which is why the compose file uses SeaweedFS. A CI job drops the demo files in that bucket and waits for the period to reconcile.
+
+Not covered: an object is read whole into memory, so the size limit (`RECON_MAX_UPLOAD_MB`) matters; there is no notification from the bucket, only polling; and an object deleted from the bucket does not remove anything that was registered from it.
+
 ## Cases
 
 Each exception becomes a case that is tracked across runs. A case follows a problem by the records it involves, so it keeps its notes and history while its amounts change. It closes by itself, as resolved, only when its records appear in a match in the data. I can report a fix, accept a variance with a reason and a note, reopen an accepted one, and add notes; I cannot mark a case resolved by hand. A reported fix is checked when new data arrives: if the problem is still there the case reopens with a flag. An accepted case comes back if the data behind it changes. Every transition is kept in an append-only log.

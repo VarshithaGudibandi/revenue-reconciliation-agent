@@ -16,7 +16,8 @@ from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.writer import write_dataset
 from recon.jobs import queue
-from recon.jobs.handlers import RECONCILE_PERIOD, handlers_for
+from recon.jobs.handlers import handlers_for
+from recon.jobs.kinds import RECONCILE_PERIOD
 from recon.jobs.worker import Worker
 from recon.main import create_app
 from recon.persistence.models import Job, Run

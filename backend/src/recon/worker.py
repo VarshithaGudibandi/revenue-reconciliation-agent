@@ -9,8 +9,10 @@ from sqlalchemy.orm import sessionmaker
 
 from recon.config import Settings
 from recon.db import create_db_engine
+from recon.ingest.store import S3Store
 from recon.jobs.handlers import handlers_for
-from recon.jobs.worker import Worker
+from recon.jobs.kinds import SCAN_BUCKET
+from recon.jobs.worker import Periodic, Worker
 
 
 def main() -> None:
@@ -18,9 +20,30 @@ def main() -> None:
     settings = Settings()
     engine = create_db_engine(settings.database_url)
     sessions = sessionmaker(engine)
+    store = None
+    periodic: list[Periodic] = []
+    if settings.s3_bucket:
+        store = S3Store(
+            settings.s3_bucket,
+            endpoint_url=settings.s3_endpoint_url,
+            region=settings.s3_region,
+            access_key=settings.s3_access_key,
+            secret_key=settings.s3_secret_key.get_secret_value()
+            if settings.s3_secret_key
+            else None,
+        )
+        periodic.append(
+            Periodic(
+                SCAN_BUCKET,
+                settings.s3_bucket,
+                {"bucket": settings.s3_bucket},
+                timedelta(seconds=settings.s3_poll_seconds),
+            )
+        )
     worker = Worker(
         sessions,
-        handlers_for(sessions),
+        handlers_for(sessions, store, settings),
+        periodic=periodic,
         lease=timedelta(seconds=settings.job_lease_seconds),
         heartbeat_every=timedelta(seconds=settings.job_heartbeat_seconds),
         poll_seconds=settings.job_poll_seconds,

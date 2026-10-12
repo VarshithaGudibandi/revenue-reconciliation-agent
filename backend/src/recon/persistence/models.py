@@ -560,3 +560,46 @@ class Job(Base):
     created_at: Mapped[datetime] = created_at()
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IngestedObject(Base):
+    """What a bucket scan did with one version of an object (its key and ETag).
+
+    Registered, unchanged and failed are final for that version. A skipped object is looked at
+    again on every scan, because the reason (no such profile yet, say) may stop applying.
+    """
+
+    __tablename__ = "ingested_object"
+    __table_args__ = (
+        UniqueConstraint("bucket", "object_key", "etag", name="uq_ingested_object_version"),
+        CheckConstraint(
+            "status IN ('registered', 'unchanged', 'skipped', 'failed')", name="status_known"
+        ),
+        CheckConstraint(
+            "(status IN ('skipped', 'failed')) = (reason IS NOT NULL)", name="reason_iff_not_read"
+        ),
+        CheckConstraint(
+            "(status IN ('registered', 'unchanged')) = (file_version_id IS NOT NULL)",
+            name="version_iff_read",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    bucket: Mapped[str] = mapped_column(Text, nullable=False)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    etag: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("profile.id", ondelete="CASCADE")
+    )
+    period: Mapped[str | None] = mapped_column(String(7))
+    source: Mapped[str | None] = mapped_column(Text)
+    file_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("source_file_version.id", ondelete="CASCADE")
+    )
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

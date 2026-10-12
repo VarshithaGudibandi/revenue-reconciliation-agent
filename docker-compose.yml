@@ -66,6 +66,55 @@ services:
       seed:
         condition: service_completed_successfully
 
+  # Optional: files dropped in a bucket are registered by a worker.
+  #   docker compose --profile s3 up --build
+  # The bucket is on SeaweedFS, an S3-compatible server for local use. The keys below are for this
+  # local stack only.
+  s3:
+    profiles: ["s3"]
+    image: chrislusf/seaweedfs:latest
+    command: ["server", "-dir=/data", "-s3", "-s3.config=/etc/seaweedfs/s3.json"]
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - s3-data:/data
+      - ./deploy/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+
+  s3-init:
+    profiles: ["s3"]
+    image: amazon/aws-cli:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - until aws --endpoint-url http://s3:8333 s3api head-bucket --bucket recon 2>/dev/null || aws --endpoint-url http://s3:8333 s3 mb s3://recon; do sleep 2; done
+    environment:
+      AWS_ACCESS_KEY_ID: recon
+      AWS_SECRET_ACCESS_KEY: recon-local-secret
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      - s3
+
+  ingest-worker:
+    profiles: ["s3"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "recon.worker"]
+    environment:
+      RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
+      RECON_S3_BUCKET: recon
+      RECON_S3_ENDPOINT_URL: http://s3:8333
+      RECON_S3_ACCESS_KEY: recon
+      RECON_S3_SECRET_KEY: recon-local-secret
+      RECON_S3_POLL_SECONDS: "5"
+    volumes:
+      - app-data:/data
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      s3-init:
+        condition: service_completed_successfully
+
 volumes:
   postgres-data:
   app-data:
+  s3-data:

@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "recon",
+      "credentials": [{ "accessKey": "recon", "secretKey": "recon-local-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}
