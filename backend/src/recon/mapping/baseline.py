@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from itertools import product
 
 from recon.datagen.styles import swapped_day_month
+from recon.mapping.answers import NO_PINS, Pins, pin_field, pin_value, pinned
 from recon.mapping.evidence import (
     amount_agreement,
     containment,
@@ -147,9 +148,14 @@ def _amount_columns(
     payments: FileProfile,
     currencies: tuple[str | None, str | None],
     separators: tuple[str, str],
+    fixed: tuple[str | None, str | None] = (None, None),
 ) -> tuple[FieldChoice, FieldChoice]:
     inv_cols = [c.header for c in invoices.columns if c.amount_like() and c.header != currencies[0]]
     pay_cols = [c.header for c in payments.columns if c.amount_like() and c.header != currencies[1]]
+    if fixed[0] in invoices.headers():
+        inv_cols = [str(fixed[0])]
+    if fixed[1] in payments.headers():
+        pay_cols = [str(fixed[1])]
     if not inv_cols or not pay_cols:
         return field_choice(alternatives=tuple(inv_cols)), field_choice(
             alternatives=tuple(pay_cols)
@@ -189,14 +195,16 @@ def _pool(profile: FileProfile, excluded: set[str]) -> list[ColumnProfile]:
 
 
 def _link(
-    invoices: list[ColumnProfile], payments: list[ColumnProfile]
+    invoices: list[ColumnProfile],
+    payments: list[ColumnProfile],
+    fixed_invoice: bool = False,
 ) -> tuple[FieldChoice, FieldChoice]:
     """The invoice id column and the payment reference column, found together: payments cite
     invoice ids."""
     hits = {
         (i.header, p.header): reference_hits(p.values, i.values)
         for i, p in product(invoices, payments)
-        if i.unique_share >= 0.95
+        if fixed_invoice or i.unique_share >= 0.95
     }
     ranked = sorted(hits.items(), key=lambda item: (-item[1], item[0]))
     if ranked and ranked[0][1] >= MIN_LINK:
@@ -218,12 +226,17 @@ def _link(
 
 
 def _counterparty(
-    invoices: list[ColumnProfile], payments: list[ColumnProfile]
+    invoices: list[ColumnProfile],
+    payments: list[ColumnProfile],
+    fixed: tuple[bool, bool] = (False, False),
 ) -> tuple[FieldChoice, FieldChoice]:
+    def varied(c: ColumnProfile, is_fixed: bool) -> bool:
+        return is_fixed or (c.distinct >= 2 and c.unique_share < 0.95)
+
     shared = {
         (i.header, p.header): containment(i.values, p.values)
         for i, p in product(invoices, payments)
-        if i.distinct >= 2 and p.distinct >= 2 and i.unique_share < 0.95 and p.unique_share < 0.95
+        if varied(i, fixed[0]) and varied(p, fixed[1])
     }
     ranked = sorted(shared.items(), key=lambda item: (-item[1], item[0]))
     if ranked and ranked[0][1] >= 0.5:
@@ -288,17 +301,23 @@ def _dates(
     payments: FileProfile,
     taken: tuple[set[str], set[str]],
     links: list[tuple[int, int]],
+    fixed: tuple[str | None, str | None] = (None, None),
+    formats: tuple[str | None, str | None] = (None, None),
 ) -> tuple[FieldChoice, FieldChoice]:
     inv_cands = [c for c in invoices.columns if c.date_like() and c.header not in taken[0]]
     pay_cands = [c for c in payments.columns if c.date_like() and c.header not in taken[1]]
+    if fixed[0] in invoices.headers():
+        inv_cands = [invoices.column(str(fixed[0]))]
+    if fixed[1] in payments.headers():
+        pay_cands = [payments.column(str(fixed[1]))]
 
     lag: dict[tuple[str, str], float] = {}
     for i, p in product(inv_cands, pay_cands):
         score = date_lag_plausibility(
             invoices,
-            (i.header, i.date_formats()[0]),
+            (i.header, formats[0] or i.date_formats()[0]),
             payments,
-            (p.header, p.date_formats()[0]),
+            (p.header, formats[1] or p.date_formats()[0]),
             links,
         )
         if score is not None:
@@ -370,33 +389,89 @@ def _text(pool: Sequence[ColumnProfile], taken: Sequence[str | None]) -> FieldCh
     return choice
 
 
-def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProposal:
-    inv_cur, pay_cur = _currency(invoices), _currency(payments)
-    inv_sep, pay_sep = _separator(invoices, inv_cur.column), _separator(payments, pay_cur.column)
+def _only(headers: Sequence[str], pins: Pins, source: str, field: str) -> str | None:
+    """The column a person pinned for a field, if it is one of the file's columns."""
+    column = pins.get((source, field))
+    return column if pinned(pins, source, field) and column in headers else None
+
+
+def propose_mapping(
+    invoices: FileProfile, payments: FileProfile, pins: Pins = NO_PINS
+) -> MappingProposal:
+    """Propose a mapping for two files. ``pins`` are a person's answers: each is taken as a fact,
+    and the evidence that rests on it (which amounts agree, which payments name which invoice,
+    which dates fall in order) is worked out again from the pinned column."""
+    inv_h, pay_h = invoices.headers(), payments.headers()
+
+    def pin(choice: FieldChoice, source: str, field: str) -> FieldChoice:
+        return pin_field(choice, pins, source, field)
+
+    inv_cur = pin(_currency(invoices), "invoices", "currency")
+    pay_cur = pin(_currency(payments), "payments", "currency")
+    inv_sep = pin_value(_separator(invoices, inv_cur.column), pins, "invoices", "decimal_separator")
+    pay_sep = pin_value(_separator(payments, pay_cur.column), pins, "payments", "decimal_separator")
     inv_amount, pay_amount = _amount_columns(
         invoices,
         payments,
         (inv_cur.column, pay_cur.column),
         (inv_sep.value or ".", pay_sep.value or "."),
+        (_only(inv_h, pins, "invoices", "amount"), _only(pay_h, pins, "payments", "amount")),
+    )
+    inv_amount, pay_amount = (
+        pin(inv_amount, "invoices", "amount"),
+        pin(pay_amount, "payments", "amount"),
     )
 
     inv_pool, pay_pool = _pool(invoices, set()), _pool(payments, set())
-    inv_id, pay_ref = _link(inv_pool, pay_pool)
+    fixed_id = _only(inv_h, pins, "invoices", "record_id")
+    fixed_ref = _only(pay_h, pins, "payments", "reference")
+    if pinned(pins, "payments", "reference") and pins[("payments", "reference")] is None:
+        inv_id, pay_ref = field_choice(), field_choice()
+    else:
+        inv_id, pay_ref = _link(
+            [invoices.column(fixed_id)] if fixed_id else inv_pool,
+            [payments.column(fixed_ref)] if fixed_ref else pay_pool,
+            fixed_invoice=fixed_id is not None,
+        )
+    inv_id, pay_ref = pin(inv_id, "invoices", "record_id"), pin(pay_ref, "payments", "reference")
+
     inv_rest = [c for c in inv_pool if c.header != inv_id.column]
     pay_rest = [c for c in pay_pool if c.header != pay_ref.column]
-    inv_party, pay_party = _counterparty(inv_rest, pay_rest)
+    fixed_inv_party = _only(inv_h, pins, "invoices", "counterparty")
+    fixed_pay_party = _only(pay_h, pins, "payments", "counterparty")
+    inv_party, pay_party = _counterparty(
+        [invoices.column(fixed_inv_party)] if fixed_inv_party else inv_rest,
+        [payments.column(fixed_pay_party)] if fixed_pay_party else pay_rest,
+        (fixed_inv_party is not None, fixed_pay_party is not None),
+    )
+    inv_party, pay_party = (
+        pin(inv_party, "invoices", "counterparty"),
+        pin(pay_party, "payments", "counterparty"),
+    )
     if inv_id.column is None:
-        inv_id = _record_id(inv_rest, INVOICE_ID_WORDS)
-    pay_id = _record_id([c for c in pay_rest if c.header != pay_party.column], PAYMENT_ID_WORDS)
+        inv_id = pin(_record_id(inv_rest, INVOICE_ID_WORDS), "invoices", "record_id")
+    pay_id = pin(
+        _record_id([c for c in pay_rest if c.header != pay_party.column], PAYMENT_ID_WORDS),
+        "payments",
+        "record_id",
+    )
 
     links = (
         linked_rows(invoices, inv_id.column, payments, pay_ref.column)
-        if inv_id.column and pay_ref.column
+        if inv_id.column in inv_h and pay_ref.column in pay_h
         else []
     )
-    inv_date, pay_date = _dates(invoices, payments, (set(), set()), links)
-    inv_text = _text(inv_rest, (inv_party.column, inv_id.column))
-    pay_text = _text(pay_rest, (pay_party.column, pay_id.column))
+    inv_date, pay_date = _dates(
+        invoices,
+        payments,
+        (set(), set()),
+        links,
+        (_only(inv_h, pins, "invoices", "date"), _only(pay_h, pins, "payments", "date")),
+        (pins.get(("invoices", "date_format")), pins.get(("payments", "date_format"))),
+    )
+    inv_date, pay_date = pin(inv_date, "invoices", "date"), pin(pay_date, "payments", "date")
+    inv_text = pin(_text(inv_rest, (inv_party.column, inv_id.column)), "invoices", "text")
+    pay_text = pin(_text(pay_rest, (pay_party.column, pay_id.column)), "payments", "text")
 
     return MappingProposal(
         invoices=FileProposal(
@@ -408,7 +483,9 @@ def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProp
                 "currency": inv_cur,
                 "text": inv_text,
             },
-            date_format=_date_format_for(invoices, inv_date),
+            date_format=pin_value(
+                _date_format_for(invoices, inv_date), pins, "invoices", "date_format"
+            ),
             decimal_separator=inv_sep,
         ),
         payments=FileProposal(
@@ -421,7 +498,9 @@ def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProp
                 "reference": pay_ref,
                 "text": pay_text,
             },
-            date_format=_date_format_for(payments, pay_date),
+            date_format=pin_value(
+                _date_format_for(payments, pay_date), pins, "payments", "date_format"
+            ),
             decimal_separator=pay_sep,
         ),
     )
