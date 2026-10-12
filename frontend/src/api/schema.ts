@@ -692,6 +692,8 @@ export interface components {
             record_id: string;
             /** Reference */
             reference?: string | null;
+            /** Text */
+            text?: string | null;
         };
         /** MatchPage */
         MatchPage: {

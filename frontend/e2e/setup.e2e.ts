@@ -31,6 +31,8 @@ test("sets up a reconciliation from two files and answers what the values cannot
   await expect(page.getByRole("button", { name: "Create and reconcile" })).toBeDisabled();
   await expect(page.getByLabel("Invoice number")).toHaveValue("N.º de factura");
   await expect(page.getByLabel("Payment date")).toHaveValue("Booking Date");
+  await expect(page.getByLabel("Description")).toHaveValue("Concepto");
+  await expect(page.getByLabel("Payment memo")).toHaveValue("Details");
 
   // the two things the data cannot settle: which amount is the total, and the date order
   await page.locator("#invoices-amount").selectOption("Importe total");

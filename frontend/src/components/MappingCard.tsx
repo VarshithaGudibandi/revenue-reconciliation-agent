@@ -12,6 +12,7 @@ export interface MappingState {
   amount: string;
   currency: string;
   reference: string;
+  text: string;
   date_format: string;
   decimal_separator: "." | "," | "";
 }
@@ -30,6 +31,7 @@ export function initialMapping(proposal: FileProposal): MappingState {
     amount: column("amount"),
     currency: column("currency"),
     reference: column("reference"),
+    text: column("text"),
     date_format: proposal.date_format.value ?? "",
     decimal_separator: (proposal.decimal_separator.value as "." | "," | null) ?? "",
   };
@@ -59,10 +61,12 @@ export function requiredKeys(): MappingKey[] {
   return REQUIRED;
 }
 
-/** What the user has to look at: everything required, and the optional reference of payments. */
+/** What the user has to look at: everything required, and the optional columns. */
 export function reviewKeys(source: Source): MappingKey[] {
-  return source === "payments" ? [...REQUIRED, "reference"] : REQUIRED;
+  return source === "payments" ? [...REQUIRED, "reference", "text"] : [...REQUIRED, "text"];
 }
+
+const OPTIONAL: MappingKey[] = ["reference", "text"];
 
 /** True when every required choice is made, so the files can be previewed. */
 export function isComplete(mapping: MappingState): boolean {
@@ -77,6 +81,7 @@ export function toBody(mapping: MappingState) {
     amount: mapping.amount,
     currency: mapping.currency,
     reference: mapping.reference || null,
+    text: mapping.text || null,
     date_format: mapping.date_format,
     decimal_separator: mapping.decimal_separator as "." | ",",
   };
@@ -163,7 +168,7 @@ export function MappingCard({ source, proposal, dateFormats, mapping, answered, 
       value: h,
       label: possible.has(h) && h !== mapping[key] ? `${h} · possible` : h,
     }));
-    return key === "reference" ? [{ value: "", label: "No such column" }, ...base] : base;
+    return OPTIONAL.includes(key) ? [{ value: "", label: "No such column" }, ...base] : base;
   };
 
   return (

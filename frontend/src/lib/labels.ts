@@ -49,6 +49,7 @@ export const FIELD_LABELS: Record<"invoices" | "payments", Record<string, string
     date: "Invoice date",
     amount: "Invoice total",
     currency: "Currency",
+    text: "Description",
   },
   payments: {
     record_id: "Payment id",
@@ -57,6 +58,7 @@ export const FIELD_LABELS: Record<"invoices" | "payments", Record<string, string
     amount: "Amount paid",
     currency: "Currency",
     reference: "Invoice reference",
+    text: "Payment memo",
   },
 };
 
@@ -65,6 +67,7 @@ export const FIELD_HINTS: Record<string, string> = {
   counterparty: "The same customer value appears in both files.",
   amount: "Including tax: the amount that gets paid.",
   reference: "The text that names the invoice a payment is for. Leave empty if there is none.",
+  text: "Free text: what an invoice is for, or what the payer wrote. Used to suggest which invoice an ambiguous payment is for. Leave empty if there is none.",
 };
 
 export const DECIMAL_LABELS: Record<string, string> = {

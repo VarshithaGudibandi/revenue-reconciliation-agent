@@ -104,8 +104,14 @@ describe("Setup", () => {
     await waitFor(() => expect(create()).toBeEnabled());
     const preview = calls.filter((c) => c.path.endsWith("/preview")).at(-1)!;
     expect(preview.body).toMatchObject({
-      invoices: { amount: "gross", date_format: "%d/%m/%Y", decimal_separator: ".", reference: null },
-      payments: { reference: "ref", date_format: "%m/%d/%Y" },
+      invoices: {
+        amount: "gross",
+        date_format: "%d/%m/%Y",
+        decimal_separator: ".",
+        reference: null,
+        text: "desc",
+      },
+      payments: { reference: "ref", date_format: "%m/%d/%Y", text: null },
     });
     expect(screen.getByText("INV-000001")).toBeInTheDocument();
     expect(screen.getByText("INV000001")).toBeInTheDocument();

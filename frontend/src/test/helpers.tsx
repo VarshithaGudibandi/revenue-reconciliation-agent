@@ -97,7 +97,7 @@ export function proposalFixture(overrides: Record<string, unknown> = {}) {
       source: "invoices",
       file_name: "invoices.csv",
       rows: 48,
-      headers: ["inv", "cust", "dt", "ccy", "net", "gross"],
+      headers: ["inv", "cust", "dt", "ccy", "net", "gross", "desc"],
       needs_answer: 2,
       fields: [
         choice("record_id", "inv", true, { reasons: ["The only column of unique values"] }),
@@ -108,6 +108,7 @@ export function proposalFixture(overrides: Record<string, unknown> = {}) {
           reasons: ["No header word points to this field"],
         }),
         choice("currency", "ccy", true),
+        choice("text", "desc", true),
       ],
       date_format: {
         value: null,
@@ -130,6 +131,7 @@ export function proposalFixture(overrides: Record<string, unknown> = {}) {
         choice("amount", "amt", true),
         choice("currency", "ccy", true),
         choice("reference", "ref", true),
+        choice("text", null, true),
       ],
       date_format: { value: "%m/%d/%Y", confident: true, alternatives: [], reasons: [] },
       decimal_separator: { value: ".", confident: true, alternatives: [], reasons: [] },

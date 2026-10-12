@@ -102,6 +102,34 @@ describe("MappingCard", () => {
   });
 });
 
+describe("the optional text column", () => {
+  it("has a row for each file, named for what it holds, with an explicit way to say there is none", async () => {
+    const { onChange } = renderCard("invoices", invoices);
+
+    expect(screen.getByLabelText("Description")).toHaveValue("desc");
+    const options = within(screen.getByLabelText("Description")).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toContain("No such column");
+    await userEvent.selectOptions(screen.getByLabelText("Description"), "No such column");
+    expect(onChange).toHaveBeenCalledWith("text", "");
+  });
+
+  it("is the payment memo in a payment file, and settled when the file has none", () => {
+    renderCard("payments", payments);
+
+    const row = screen.getByLabelText("Payment memo").closest("tr")!;
+    expect(screen.getByLabelText("Payment memo")).toHaveValue("");
+    expect(within(row).getByText("Confident")).toBeInTheDocument();
+  });
+
+  it("is sent to the server when chosen and as null when not", () => {
+    const withText = initialMapping(invoices);
+    const without = initialMapping(payments);
+
+    expect(toBody(withText).text).toBe("desc");
+    expect(toBody(without).text).toBeNull();
+  });
+});
+
 describe("mapping state", () => {
   it("starts from what was proposed and treats only the confident rows as answered", () => {
     const mapping = initialMapping(invoices);
