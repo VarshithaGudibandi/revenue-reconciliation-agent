@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,3 +17,11 @@ class Settings(BaseSettings):
     demo: bool = False
     # A built frontend to serve at the root, if present.
     static_dir: Path | None = None
+    # Who proposes column mappings. "auto" uses the language model when credentials are
+    # present and the rules alone otherwise; "rules" never calls a model; "hybrid" requires one.
+    mapper: Literal["auto", "rules", "hybrid"] = "auto"
+    llm_model: str = "claude-opus-5-5"
+    llm_effort: Literal["low", "medium", "high"] = "low"
+    llm_fallbacks: bool = True
+    # Serve model answers recorded earlier instead of calling the API.
+    llm_replay: Path | None = None

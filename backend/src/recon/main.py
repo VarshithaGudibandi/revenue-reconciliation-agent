@@ -15,16 +15,27 @@ from starlette.types import Scope
 
 from recon.api.idempotency import IdempotencyKeyError
 from recon.api.routes import demo_router, router
+from recon.api.setup_routes import router as setup_router
 from recon.config import Settings
 from recon.db import create_db_engine
 from recon.ingestion.normalize import MappingError
+from recon.mapping.service import build_mapper
 from recon.persistence.case_actions import (
     CaseNotFoundError,
     InvalidTransitionError,
     StaleCaseError,
 )
-from recon.persistence.repository import UnknownProfileError, UnknownSourceError
+from recon.persistence.repository import (
+    ProfileExistsError,
+    UnknownProfileError,
+    UnknownSourceError,
+)
 from recon.persistence.runs import MissingInputsError, UnknownRunError
+from recon.persistence.setup import (
+    ProposalConflictError,
+    UnknownProposalError,
+    UnusableMappingError,
+)
 
 
 def error_response(status_code: int, code: str, message: str, **extra: Any) -> JSONResponse:
@@ -37,7 +48,13 @@ def register_error_handlers(app: FastAPI) -> None:
     def not_found(_: Request, error: Exception) -> JSONResponse:
         return error_response(404, "not_found", str(error))
 
-    for exception in (CaseNotFoundError, UnknownProfileError, UnknownSourceError, UnknownRunError):
+    for exception in (
+        CaseNotFoundError,
+        UnknownProfileError,
+        UnknownSourceError,
+        UnknownRunError,
+        UnknownProposalError,
+    ):
         app.add_exception_handler(exception, not_found)
 
     @app.exception_handler(StaleCaseError)
@@ -47,6 +64,18 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(InvalidTransitionError)
     def invalid_transition(_: Request, error: InvalidTransitionError) -> JSONResponse:
         return error_response(409, "invalid_transition", str(error))
+
+    @app.exception_handler(ProposalConflictError)
+    def proposal_conflict(_: Request, error: ProposalConflictError) -> JSONResponse:
+        return error_response(409, "proposal_confirmed", str(error))
+
+    @app.exception_handler(ProfileExistsError)
+    def profile_exists(_: Request, error: ProfileExistsError) -> JSONResponse:
+        return error_response(409, "profile_exists", str(error))
+
+    @app.exception_handler(UnusableMappingError)
+    def unusable_mapping(_: Request, error: UnusableMappingError) -> JSONResponse:
+        return error_response(422, "unusable_mapping", str(error))
 
     @app.exception_handler(MissingInputsError)
     def missing_inputs(_: Request, error: MissingInputsError) -> JSONResponse:
@@ -99,6 +128,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Revenue Reconciliation", lifespan=lifespan)
     app.state.settings = resolved
     app.state.sessions = sessionmaker(engine)
+    app.state.mapper = build_mapper(resolved)
     register_error_handlers(app)
 
     @app.get("/health")
@@ -116,6 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok", "database": "ok"}
 
     app.include_router(router)
+    app.include_router(setup_router)
     if resolved.demo:
         app.include_router(demo_router)
 

@@ -247,6 +247,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose
+         * @description Read two sample files and propose how their columns map to the fields we need.
+         *
+         *     Nothing is configured yet: the proposal is kept until it is confirmed.
+         */
+        post: operations["propose_api_setup_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/proposals/{proposal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Proposal */
+        get: operations["read_proposal_api_setup_proposals__proposal_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/proposals/{proposal_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm
+         * @description Create the profile from the confirmed mapping, register the two sample files and
+         *     reconcile the first period. Confirming the same proposal again with the same name and
+         *     mapping returns the profile that exists.
+         */
+        post: operations["confirm_api_setup_proposals__proposal_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/setup/proposals/{proposal_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview
+         * @description Show how the sample files would be read with a mapping, before anything is saved.
+         */
+        post: operations["preview_api_setup_proposals__proposal_id__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -325,6 +406,15 @@ export interface components {
             summary: string;
             /** Why */
             why: string;
+        };
+        /** Body_propose_api_setup_proposals_post */
+        Body_propose_api_setup_proposals_post: {
+            /** Invoices */
+            invoices: string;
+            /** Payments */
+            payments: string;
+            /** Period */
+            period: string;
         };
         /** Body_upload_file_api_profiles__profile_id__periods__period__files__source__post */
         Body_upload_file_api_profiles__profile_id__periods__period__files__source__post: {
@@ -427,6 +517,44 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ColumnChoiceOut */
+        ColumnChoiceOut: {
+            /** Alternatives */
+            alternatives: string[];
+            /** Column */
+            column: string | null;
+            /** Confident */
+            confident: boolean;
+            /** Field */
+            field: string;
+            /** Reasons */
+            reasons: string[];
+        };
+        /** ConfirmBody */
+        ConfirmBody: {
+            invoices: components["schemas"]["MappingBody"];
+            /** Name */
+            name: string;
+            payments: components["schemas"]["MappingBody"];
+        };
+        /** ConfirmOut */
+        ConfirmOut: {
+            cases: components["schemas"]["SyncOut"] | null;
+            /** Created */
+            created: boolean;
+            /** Period */
+            period: string;
+            profile: components["schemas"]["ProfileOut"];
+            /** Records */
+            records: {
+                [key: string]: number;
+            };
+            /** Rejected */
+            rejected: {
+                [key: string]: number;
+            };
+            run: components["schemas"]["RunOut"] | null;
+        };
         /** DemoOut */
         DemoOut: {
             /** Corrected Files Loaded */
@@ -493,6 +621,44 @@ export interface components {
             /** Version Number */
             version_number: number;
         };
+        /** FilePreview */
+        FilePreview: {
+            /** Error */
+            error: string | null;
+            /** Records Read */
+            records_read: number;
+            /** Rejected */
+            rejected: number;
+            /** Rejections */
+            rejections: components["schemas"]["PreviewRejection"][];
+            /** Sample */
+            sample: components["schemas"]["PreviewRecord"][];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "invoices" | "payments";
+        };
+        /** FileProposalOut */
+        FileProposalOut: {
+            date_format: components["schemas"]["SettingChoiceOut"];
+            decimal_separator: components["schemas"]["SettingChoiceOut"];
+            /** Fields */
+            fields: components["schemas"]["ColumnChoiceOut"][];
+            /** File Name */
+            file_name: string;
+            /** Headers */
+            headers: string[];
+            /** Needs Answer */
+            needs_answer: number;
+            /** Rows */
+            rows: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "invoices" | "payments";
+        };
         /** KindTotal */
         KindTotal: {
             /** Amounts */
@@ -501,6 +667,28 @@ export interface components {
             count: number;
             /** Kind */
             kind: string;
+        };
+        /** MappingBody */
+        MappingBody: {
+            /** Amount */
+            amount: string;
+            /** Counterparty */
+            counterparty: string;
+            /** Currency */
+            currency: string;
+            /** Date */
+            date: string;
+            /** Date Format */
+            date_format: string;
+            /**
+             * Decimal Separator
+             * @enum {string}
+             */
+            decimal_separator: "." | ",";
+            /** Record Id */
+            record_id: string;
+            /** Reference */
+            reference?: string | null;
         };
         /** MatchPage */
         MatchPage: {
@@ -590,6 +778,42 @@ export interface components {
             /** Unverified Fixes */
             unverified_fixes: number;
         };
+        /** PreviewBody */
+        PreviewBody: {
+            invoices: components["schemas"]["MappingBody"];
+            payments: components["schemas"]["MappingBody"];
+        };
+        /** PreviewOut */
+        PreviewOut: {
+            invoices: components["schemas"]["FilePreview"];
+            payments: components["schemas"]["FilePreview"];
+            /** Ready */
+            ready: boolean;
+        };
+        /** PreviewRecord */
+        PreviewRecord: {
+            amount: components["schemas"]["Amount"];
+            /** Counterparty */
+            counterparty: string;
+            /**
+             * Occurred On
+             * Format: date
+             */
+            occurred_on: string;
+            /** Record Id */
+            record_id: string;
+            /** Reference */
+            reference: string | null;
+            /** Row */
+            row: number;
+        };
+        /** PreviewRejection */
+        PreviewRejection: {
+            /** Reason */
+            reason: string;
+            /** Row */
+            row: number;
+        };
         /** ProfileOut */
         ProfileOut: {
             /**
@@ -601,6 +825,31 @@ export interface components {
             name: string;
             /** Reconciliation Type */
             reconciliation_type: string;
+        };
+        /** ProposalOut */
+        ProposalOut: {
+            /** Date Formats */
+            date_formats: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            invoices: components["schemas"]["FileProposalOut"];
+            /** Mapper */
+            mapper: string;
+            /** Model */
+            model: string | null;
+            payments: components["schemas"]["FileProposalOut"];
+            /** Period */
+            period: string;
+            /** Profile Id */
+            profile_id: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "proposed" | "confirmed";
         };
         /** RecordOut */
         RecordOut: {
@@ -636,6 +885,17 @@ export interface components {
             partitions_total: number | null;
             /** Status */
             status: string;
+        };
+        /** SettingChoiceOut */
+        SettingChoiceOut: {
+            /** Alternatives */
+            alternatives: string[];
+            /** Confident */
+            confident: boolean;
+            /** Reasons */
+            reasons: string[];
+            /** Value */
+            value: string | null;
         };
         /** SyncOut */
         SyncOut: {
@@ -1489,6 +1749,248 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeriodSummary"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    propose_api_setup_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_propose_api_setup_proposals_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_proposal_api_setup_proposals__proposal_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    confirm_api_setup_proposals__proposal_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    preview_api_setup_proposals__proposal_id__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewOut"];
                 };
             };
             /** @description The profile, period or case does not exist. */

@@ -393,3 +393,42 @@ class IdempotencyRecord(Base):
     status_code: Mapped[int | None] = mapped_column(Integer)
     response: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = created_at()
+
+
+class MappingProposalRow(Base):
+    """Two sample files and the column mapping proposed for them, until the user confirms it.
+
+    A proposal never changes how a file is read. Only confirming it creates a profile, and the
+    confirmed mapping is stored next to what was proposed.
+    """
+
+    __tablename__ = "mapping_proposal"
+    __table_args__ = (
+        CheckConstraint(f"period ~ '{PERIOD}'", name="period_format"),
+        CheckConstraint("status IN ('proposed', 'confirmed')", name="status_known"),
+        CheckConstraint(
+            "(status = 'confirmed') = (profile_id IS NOT NULL)", name="profile_iff_confirmed"
+        ),
+        CheckConstraint(
+            "(status = 'confirmed') = (confirmed_mapping IS NOT NULL)",
+            name="mapping_iff_confirmed",
+        ),
+        CheckConstraint(
+            "(status = 'confirmed') = (confirmed_at IS NOT NULL)", name="time_iff_confirmed"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    period: Mapped[str] = mapped_column(String(7), nullable=False)
+    mapper: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str | None] = mapped_column(Text)
+    invoices_key: Mapped[str] = mapped_column(Text, nullable=False)
+    payments_key: Mapped[str] = mapped_column(Text, nullable=False)
+    invoices_name: Mapped[str] = mapped_column(Text, nullable=False)
+    payments_name: Mapped[str] = mapped_column(Text, nullable=False)
+    proposal: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'proposed'"))
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("profile.id"))
+    confirmed_mapping: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()

@@ -221,3 +221,100 @@ class ErrorDetail(BaseModel):
 
 class ErrorBody(BaseModel):
     error: ErrorDetail
+
+
+class ColumnChoiceOut(BaseModel):
+    field: str
+    column: str | None
+    confident: bool
+    alternatives: list[str]
+    reasons: list[str]
+
+
+class SettingChoiceOut(BaseModel):
+    value: str | None
+    confident: bool
+    alternatives: list[str]
+    reasons: list[str]
+
+
+class FileProposalOut(BaseModel):
+    source: Literal["invoices", "payments"]
+    file_name: str
+    rows: int
+    headers: list[str]
+    fields: list[ColumnChoiceOut]
+    date_format: SettingChoiceOut
+    decimal_separator: SettingChoiceOut
+    needs_answer: int
+
+
+class ProposalOut(BaseModel):
+    id: uuid.UUID
+    period: str
+    status: Literal["proposed", "confirmed"]
+    mapper: str
+    model: str | None
+    invoices: FileProposalOut
+    payments: FileProposalOut
+    date_formats: list[str]
+    profile_id: uuid.UUID | None
+
+
+class MappingBody(BaseModel):
+    record_id: str = Field(min_length=1)
+    counterparty: str = Field(min_length=1)
+    date: str = Field(min_length=1)
+    amount: str = Field(min_length=1)
+    currency: str = Field(min_length=1)
+    reference: str | None = None
+    date_format: str = Field(min_length=1)
+    decimal_separator: Literal[".", ","]
+
+
+class PreviewBody(BaseModel):
+    invoices: MappingBody
+    payments: MappingBody
+
+
+class PreviewRecord(BaseModel):
+    row: int
+    record_id: str
+    counterparty: str
+    occurred_on: date
+    amount: Amount
+    reference: str | None
+
+
+class PreviewRejection(BaseModel):
+    row: int
+    reason: str
+
+
+class FilePreview(BaseModel):
+    source: Literal["invoices", "payments"]
+    error: str | None
+    records_read: int
+    rejected: int
+    sample: list[PreviewRecord]
+    rejections: list[PreviewRejection]
+
+
+class PreviewOut(BaseModel):
+    invoices: FilePreview
+    payments: FilePreview
+    ready: bool
+
+
+class ConfirmBody(PreviewBody):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class ConfirmOut(BaseModel):
+    profile: ProfileOut
+    period: str
+    created: bool
+    records: dict[str, int]
+    rejected: dict[str, int]
+    run: RunOut | None
+    cases: SyncOut | None

@@ -109,6 +109,31 @@
         "title": "AnalysisOut",
         "type": "object"
       },
+      "Body_propose_api_setup_proposals_post": {
+        "properties": {
+          "invoices": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Invoices",
+            "type": "string"
+          },
+          "payments": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Payments",
+            "type": "string"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "required": [
+          "invoices",
+          "payments",
+          "period"
+        ],
+        "title": "Body_propose_api_setup_proposals_post",
+        "type": "object"
+      },
       "Body_upload_file_api_profiles__profile_id__periods__period__files__source__post": {
         "properties": {
           "file": {
@@ -420,6 +445,135 @@
         "title": "CaseRow",
         "type": "object"
       },
+      "ColumnChoiceOut": {
+        "properties": {
+          "alternatives": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "confident": {
+            "title": "Confident",
+            "type": "boolean"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "field",
+          "column",
+          "confident",
+          "alternatives",
+          "reasons"
+        ],
+        "title": "ColumnChoiceOut",
+        "type": "object"
+      },
+      "ConfirmBody": {
+        "properties": {
+          "invoices": {
+            "$ref": "#/components/schemas/MappingBody"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "payments": {
+            "$ref": "#/components/schemas/MappingBody"
+          }
+        },
+        "required": [
+          "invoices",
+          "payments",
+          "name"
+        ],
+        "title": "ConfirmBody",
+        "type": "object"
+      },
+      "ConfirmOut": {
+        "properties": {
+          "cases": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SyncOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileOut"
+          },
+          "records": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Records",
+            "type": "object"
+          },
+          "rejected": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Rejected",
+            "type": "object"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "profile",
+          "period",
+          "created",
+          "records",
+          "rejected",
+          "run",
+          "cases"
+        ],
+        "title": "ConfirmOut",
+        "type": "object"
+      },
       "DemoOut": {
         "properties": {
           "corrected_files_loaded": {
@@ -608,6 +762,117 @@
         "title": "FileOut",
         "type": "object"
       },
+      "FilePreview": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "records_read": {
+            "title": "Records Read",
+            "type": "integer"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "rejections": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewRejection"
+            },
+            "title": "Rejections",
+            "type": "array"
+          },
+          "sample": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewRecord"
+            },
+            "title": "Sample",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "invoices",
+              "payments"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "error",
+          "records_read",
+          "rejected",
+          "sample",
+          "rejections"
+        ],
+        "title": "FilePreview",
+        "type": "object"
+      },
+      "FileProposalOut": {
+        "properties": {
+          "date_format": {
+            "$ref": "#/components/schemas/SettingChoiceOut"
+          },
+          "decimal_separator": {
+            "$ref": "#/components/schemas/SettingChoiceOut"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ColumnChoiceOut"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "array"
+          },
+          "needs_answer": {
+            "title": "Needs Answer",
+            "type": "integer"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "invoices",
+              "payments"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "file_name",
+          "rows",
+          "headers",
+          "fields",
+          "date_format",
+          "decimal_separator",
+          "needs_answer"
+        ],
+        "title": "FileProposalOut",
+        "type": "object"
+      },
       "KindTotal": {
         "properties": {
           "amounts": {
@@ -632,6 +897,70 @@
           "amounts"
         ],
         "title": "KindTotal",
+        "type": "object"
+      },
+      "MappingBody": {
+        "properties": {
+          "amount": {
+            "minLength": 1,
+            "title": "Amount",
+            "type": "string"
+          },
+          "counterparty": {
+            "minLength": 1,
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "currency": {
+            "minLength": 1,
+            "title": "Currency",
+            "type": "string"
+          },
+          "date": {
+            "minLength": 1,
+            "title": "Date",
+            "type": "string"
+          },
+          "date_format": {
+            "minLength": 1,
+            "title": "Date Format",
+            "type": "string"
+          },
+          "decimal_separator": {
+            "enum": [
+              ".",
+              ","
+            ],
+            "title": "Decimal Separator",
+            "type": "string"
+          },
+          "record_id": {
+            "minLength": 1,
+            "title": "Record Id",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "required": [
+          "record_id",
+          "counterparty",
+          "date",
+          "amount",
+          "currency",
+          "date_format",
+          "decimal_separator"
+        ],
+        "title": "MappingBody",
         "type": "object"
       },
       "MatchPage": {
@@ -871,6 +1200,106 @@
         "title": "PeriodSummary",
         "type": "object"
       },
+      "PreviewBody": {
+        "properties": {
+          "invoices": {
+            "$ref": "#/components/schemas/MappingBody"
+          },
+          "payments": {
+            "$ref": "#/components/schemas/MappingBody"
+          }
+        },
+        "required": [
+          "invoices",
+          "payments"
+        ],
+        "title": "PreviewBody",
+        "type": "object"
+      },
+      "PreviewOut": {
+        "properties": {
+          "invoices": {
+            "$ref": "#/components/schemas/FilePreview"
+          },
+          "payments": {
+            "$ref": "#/components/schemas/FilePreview"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "invoices",
+          "payments",
+          "ready"
+        ],
+        "title": "PreviewOut",
+        "type": "object"
+      },
+      "PreviewRecord": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "counterparty": {
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "occurred_on": {
+            "format": "date",
+            "title": "Occurred On",
+            "type": "string"
+          },
+          "record_id": {
+            "title": "Record Id",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "record_id",
+          "counterparty",
+          "occurred_on",
+          "amount",
+          "reference"
+        ],
+        "title": "PreviewRecord",
+        "type": "object"
+      },
+      "PreviewRejection": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "row": {
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row",
+          "reason"
+        ],
+        "title": "PreviewRejection",
+        "type": "object"
+      },
       "ProfileOut": {
         "properties": {
           "id": {
@@ -893,6 +1322,80 @@
           "reconciliation_type"
         ],
         "title": "ProfileOut",
+        "type": "object"
+      },
+      "ProposalOut": {
+        "properties": {
+          "date_formats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Date Formats",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoices": {
+            "$ref": "#/components/schemas/FileProposalOut"
+          },
+          "mapper": {
+            "title": "Mapper",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "payments": {
+            "$ref": "#/components/schemas/FileProposalOut"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "period",
+          "status",
+          "mapper",
+          "model",
+          "invoices",
+          "payments",
+          "date_formats",
+          "profile_id"
+        ],
+        "title": "ProposalOut",
         "type": "object"
       },
       "RecordOut": {
@@ -1024,6 +1527,47 @@
           "finished_at"
         ],
         "title": "RunOut",
+        "type": "object"
+      },
+      "SettingChoiceOut": {
+        "properties": {
+          "alternatives": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "confident": {
+            "title": "Confident",
+            "type": "boolean"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "confident",
+          "alternatives",
+          "reasons"
+        ],
+        "title": "SettingChoiceOut",
         "type": "object"
       },
       "SyncOut": {
@@ -2390,6 +2934,307 @@
           }
         },
         "summary": "Summary"
+      }
+    },
+    "/api/setup/proposals": {
+      "post": {
+        "description": "Read two sample files and propose how their columns map to the fields we need.\n\nNothing is configured yet: the proposal is kept until it is confirmed.",
+        "operationId": "propose_api_setup_proposals_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_propose_api_setup_proposals_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Propose"
+      }
+    },
+    "/api/setup/proposals/{proposal_id}": {
+      "get": {
+        "operationId": "read_proposal_api_setup_proposals__proposal_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Read Proposal"
+      }
+    },
+    "/api/setup/proposals/{proposal_id}/confirm": {
+      "post": {
+        "description": "Create the profile from the confirmed mapping, register the two sample files and\nreconcile the first period. Confirming the same proposal again with the same name and\nmapping returns the profile that exists.",
+        "operationId": "confirm_api_setup_proposals__proposal_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Confirm"
+      }
+    },
+    "/api/setup/proposals/{proposal_id}/preview": {
+      "post": {
+        "description": "Show how the sample files would be read with a mapping, before anything is saved.",
+        "operationId": "preview_api_setup_proposals__proposal_id__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Preview"
       }
     },
     "/health": {

@@ -173,6 +173,7 @@ class LlmMapper:
             answer = LlmFileMapping.model_validate_json(completion.text)
         except (LlmError, ValidationError) as error:
             self.errors.append(f"{profile.name}: {error}")
+            del self.errors[:-50]  # a long-running server keeps only the latest
             return FileProposal()
         self.calls += 1
         self.input_tokens += completion.input_tokens

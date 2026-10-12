@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+import anthropic
+
 
 class LlmError(RuntimeError):
     """The model could not give a usable answer."""
@@ -64,8 +66,6 @@ class AnthropicJson:
         client: Any = None,
     ) -> None:
         if client is None:
-            import anthropic
-
             client = anthropic.Anthropic()
         self._client = client
         self.model = model
@@ -84,12 +84,15 @@ class AnthropicJson:
                 "format": {"type": "json_schema", "schema": schema},
             },
         }
-        if self._fallbacks:
-            response = self._client.beta.messages.create(
-                betas=["server-side-fallback-2026-07-01"], fallbacks="default", **arguments
-            )
-        else:
-            response = self._client.messages.create(**arguments)
+        try:
+            if self._fallbacks:
+                response = self._client.beta.messages.create(
+                    betas=["server-side-fallback-2026-07-01"], fallbacks="default", **arguments
+                )
+            else:
+                response = self._client.messages.create(**arguments)
+        except anthropic.APIError as error:
+            raise LlmError(f"the API request failed: {error}") from error
 
         if response.stop_reason == "refusal":
             raise LlmRefusal("the model declined the request")
