@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { api, ApiError, type CaseDetail } from "../api/client";
-import { useCase, useCaseAction } from "../api/hooks";
+import { useCapabilities, useCase, useCaseAction } from "../api/hooks";
 import { formatDate, formatDateTime } from "../lib/formatters";
 import { EVENT_LABELS, KIND_LABELS, REASON_LABELS, label } from "../lib/labels";
 import { StatusBadge } from "./Badges";
 import { AcceptDialog } from "./Dialogs";
 import { CloseIcon } from "./Icons";
+import { SuggestionSection } from "./SuggestionSection";
 
 function Notice({ tone, children }: { tone?: "warning" | "critical" | "good"; children: React.ReactNode }) {
   return <div className={`notice${tone ? ` notice-${tone}` : ""}`}>{children}</div>;
@@ -71,6 +72,7 @@ export function CaseDrawer({
   onOpenCase: (id: string) => void;
 }) {
   const { data, isLoading, error } = useCase(caseId);
+  const capabilities = useCapabilities();
   const action = useCaseAction(caseId);
   const [accepting, setAccepting] = useState(false);
   const [note, setNote] = useState("");
@@ -143,6 +145,14 @@ export function CaseDrawer({
               </p>
             </section>
 
+            {data.suggestion ? (
+              <SuggestionSection
+                caseId={caseId}
+                suggestion={data.suggestion}
+                canAskModel={capabilities.data?.adjudicator.model != null}
+              />
+            ) : null}
+
             <section>
               <h3 className="section-title">Records</h3>
               <div className="table-wrap">
@@ -163,6 +173,7 @@ export function CaseDrawer({
                         <td>
                           <span className="muted">{r.role === "invoice" ? "Invoice" : "Payment"}</span>{" "}
                           <span className="mono">{r.record_id}</span>
+                          {r.text ? <div className="chart-sub record-text">{r.text}</div> : null}
                         </td>
                         <td>{r.customer ?? <span className="muted">–</span>}</td>
                         <td>{r.occurred_on ? formatDate(r.occurred_on) : <span className="muted">–</span>}</td>

@@ -159,3 +159,21 @@ export function previewFixture(ready = true, invoiceError: string | null = null)
   });
   return { invoices: file("invoices", 48, invoiceError), payments: file("payments", 125), ready };
 }
+
+export function suggestionFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    source: "rules",
+    model: null,
+    invoice_id: "INV-000121",
+    confident: true,
+    evidence: "121",
+    reasons: ["The memo names invoice number 121"],
+    alternatives: [],
+    ...overrides,
+  };
+}
+
+export const capabilities = (model: string | null = null) => ({
+  mapper: { name: model ? "rules and model" : "rules", model },
+  adjudicator: { name: model ? "rules and model" : "rules", model },
+});

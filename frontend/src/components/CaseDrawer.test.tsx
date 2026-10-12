@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { caseDetail, mockApi, renderWithClient } from "../test/helpers";
+import { capabilities, caseDetail, mockApi, renderWithClient } from "../test/helpers";
 import { CaseDrawer } from "./CaseDrawer";
 
 /** A server whose case changes once an action succeeds, so the refetch after it agrees. */
@@ -9,6 +9,7 @@ function open(overrides: Record<string, unknown> = {}, action?: { path: string; 
   let current: unknown = caseDetail(overrides);
   const api = mockApi({
     "GET /api/cases/case-1": () => ({ body: current }),
+    "GET /api/capabilities": { body: capabilities() },
     ...(action
       ? {
           [`POST ${action.path}`]: () => {

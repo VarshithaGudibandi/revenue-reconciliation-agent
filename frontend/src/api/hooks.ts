@@ -108,3 +108,14 @@ export function useConfirm(proposalId: string) {
     },
   });
 }
+
+export const useCapabilities = () =>
+  useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities, staleTime: Infinity });
+
+export function useAskForSuggestion(caseId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.askForSuggestion(caseId),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["case", caseId] }),
+  });
+}

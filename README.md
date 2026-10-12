@@ -123,7 +123,9 @@ The engine never decides which of several look-alike invoices a payment belongs 
 | paraphrased | 26 | 0 | 26 |
 | useless | 25 | 0 | 25 |
 
-The rules are never confidently wrong. No adjudicator can do better than abstain on a useless memo, so 74% of these cases is the most that can be answered; the rules answer 47%, and the 27% that are paraphrased, with synonyms, other languages or typos, are what a model could add. There are no recorded model answers in this repository yet, so there is no measured result for the model; the unit tests use a fake one. Adjudication is not yet connected to the application: the memo is generated but not yet part of the exported files, the profiles or the case view.
+The rules are never confidently wrong. No adjudicator can do better than abstain on a useless memo, so 74% of these cases is the most that can be answered; the rules answer 47%, and the 27% that are paraphrased, with synonyms, other languages or typos, are what a model could add. There are no recorded model answers in this repository yet, so there is no measured result for the model; the unit tests use a fake one.
+
+In the application, the free text of a record is an optional column in the mapping (shown as Description for invoices and Payment memo for payments), stored with each record and shown under it in the case view. Every ambiguous-payment case carries a suggestion: the rules' reading of the memo, computed when the case is opened. When a language model is configured, "Ask the model" (`POST /api/cases/{id}/suggestion`) asks it once for what the case holds now and keeps the answer for that exact input, so asking again costs nothing and a changed file is a new question. The case view says who read the memo, quotes the words the suggestion rests on, and marks a suggestion the rules could not settle as "A suggestion, not settled". `GET /api/capabilities` says whether a model is configured. Nothing about a case changes because of a suggestion; the next step stays correcting the reference at the source.
 
 ## Synthetic data
 

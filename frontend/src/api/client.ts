@@ -14,6 +14,8 @@ export type ColumnChoice = Schemas["ColumnChoiceOut"];
 export type MappingBody = Schemas["MappingBody"];
 export type Preview = Schemas["PreviewOut"];
 export type FilePreview = Schemas["FilePreview"];
+export type Suggestion = Schemas["SuggestionOut"];
+export type Capabilities = Schemas["CapabilitiesOut"];
 export type Confirmation = Schemas["ConfirmOut"];
 
 export class ApiError extends Error {
@@ -125,6 +127,9 @@ export const api = {
     proposalId: string,
     body: { name: string; invoices: MappingBody; payments: MappingBody },
   ) => post<Confirmation>(`/api/setup/proposals/${proposalId}/confirm`, body),
+  capabilities: () => request<Capabilities>("/api/capabilities"),
+  askForSuggestion: (caseId: string) =>
+    request<Suggestion>(`/api/cases/${caseId}/suggestion`, { method: "POST" }),
   demo: () => request<Schemas["DemoOut"]>("/api/demo"),
   loadCorrectedExport: () =>
     request<Upload>("/api/demo/load-corrected-export", { method: "POST" }),

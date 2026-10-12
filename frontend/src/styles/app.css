@@ -767,3 +767,16 @@ table.table {
     border: 0;
   }
 }
+
+.suggestion .quote {
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--axis);
+  background: var(--wash);
+  border-radius: 0 8px 8px 0;
+}
+
+.record-text {
+  max-width: 28ch;
+  overflow-wrap: anywhere;
+}
