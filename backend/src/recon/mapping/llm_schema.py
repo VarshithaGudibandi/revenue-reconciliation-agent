@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from recon.mapping.profile import DATE_FORMATS, FileProfile
 from recon.mapping.proposal import FIELDS
 
-PROMPT_VERSION = "mapping-2"
+PROMPT_VERSION = "mapping-3"
 NO_COLUMN = "(none)"
 UNKNOWN = "unknown"
 Confidence = Literal["high", "medium", "low"]
@@ -37,6 +37,9 @@ amount, the tax or an open balance. For payments, the amount paid, not the fee.
 - currency: the column of currency codes.
 - reference (payment files only): the text or id that says which invoice the payment is for. \
 Use "(none)" if there is no such column.
+- text (optional): the column of free text the source holds about each record, such as what \
+an invoice is for or what the payer wrote. Its values are mostly several words. Use "(none)" \
+if there is no such column.
 - date_format: one of the listed formats, and only a format the column's date_formats list \
 says fits. If more than one fits, for example day-month and month-day, answer "unknown" and \
 add a question: never guess the order.
@@ -72,6 +75,7 @@ class LlmFileMapping(BaseModel, frozen=True):
     amount: LlmField
     currency: LlmField
     reference: LlmField
+    text: LlmField
     date_format: LlmSetting
     decimal_separator: LlmSetting
     questions: tuple[str, ...]

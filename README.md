@@ -78,6 +78,7 @@ The baseline mapper (`mapping/baseline.py`) uses no language model. It decides f
 - the invoice id and the payment reference are found together, because payments cite invoice ids;
 - the customer columns are the pair that share their values across the two files;
 - among several date columns, the issue date is the one payments fall after, not before;
+- a column whose values are mostly several words is the optional free text (what an invoice is for, what a payer wrote), and such a column is never taken for a payment reference;
 - a date that fits both day-month and month-day is returned as a question, not as a guess.
 
 Every field is either confident or comes with the alternatives, so a user can be asked. `python -m recon.evaluation.mapping_eval` runs the mapper over every pair of export styles and reports, per field, whether it was correct, asked (the right answer was among the options), missed, or confidently wrong. The last is the one that matters. A second variant keeps only invoices from the first 12 days of the month, where the date order cannot be read from the values and asking is the right answer.
@@ -89,9 +90,9 @@ Files by outcome, 3 seeds of 120 invoices, full month and first-12-days variants
 | | development | held out | stress |
 |---|---|---|---|
 | both files together: exact / needs the user | 89% / 11% | 77% / 23% | 47% / 53% |
-| each file alone: exact / needs the user | 72% / 28% | 75% / 25% | 30% / 70% |
+| each file alone: exact / needs the user | 72% / 28% | 62% / 38% | 28% / 72% |
 
-No file in any group was confidently wrong, and no field was missed (a field is missed when the right answer is not among the options offered). Everything not exact is a question for the user. I wrote the generator, the styles and the baseline, so these numbers show how the baseline behaves on my data, not on real exports; the stress column is the part that says where header words run out.
+The held-out figure for a file alone fell from 75% to 62% when the styles gained a free-text column: in `xero_like` a column of sentences is a second candidate for the customer, and its headers (`*ContactName`) are not in the baseline's word lists, which I did not extend because the style is held out. No file in any group was confidently wrong, and no field was missed (a field is missed when the right answer is not among the options offered). Everything not exact is a question for the user. I wrote the generator, the styles and the baseline, so these numbers show how the baseline behaves on my data, not on real exports; the stress column is the part that says where header words run out.
 
 ### Mapping with a language model
 

@@ -248,3 +248,98 @@ def test_the_date_format_is_settled_when_every_candidate_date_column_shares_it()
     assert not proposal.choice("date").confident  # which of the two dates is not known
     assert proposal.date_format.value == "%Y-%m-%d"
     assert proposal.date_format.confident
+
+
+def test_the_free_text_column_is_found_when_there_is_one_and_absent_when_there_is_not(
+    tmp_path: Path,
+) -> None:
+    proposal = proposal_for(ExportStyles("erp_english", "bank_statement"), tmp_path)
+
+    assert proposal.invoices.choice("text").column == "Description"
+    assert proposal.payments.choice("text").column == "Details"
+    assert proposal.invoices.choice("text").confident
+    assert proposal.payments.choice("text").confident
+
+    plain = proposal_for(ExportStyles("default", "default"), tmp_path / "plain")
+    assert plain.invoices.choice("text").column is None
+    assert plain.invoices.choice("text").confident
+    assert plain.payments.choice("text").column is None
+
+
+def test_the_proposed_mapping_reads_the_text_of_the_files(tmp_path: Path) -> None:
+    dataset = generate_dataset(Config(seed=3, invoices=120, ambiguous_rate=0.05))
+    write_dataset(dataset, tmp_path, ExportStyles("german", "german_bank"))
+    proposal = propose_mapping(
+        profile_csv_bytes("i.csv", (tmp_path / "invoices.csv").read_bytes()),
+        profile_csv_bytes("p.csv", (tmp_path / "payments.csv").read_bytes()),
+    )
+    invoice_mapping, payment_mapping = (
+        proposal.invoices.to_mapping(),
+        proposal.payments.to_mapping(),
+    )
+    assert invoice_mapping is not None
+    assert payment_mapping is not None
+    assert invoice_mapping.text == "Beschreibung"
+    assert payment_mapping.text == "Buchungstext"
+
+    invoices = normalize_csv(tmp_path / "invoices.csv", invoice_mapping)
+    payments = normalize_csv(tmp_path / "payments.csv", payment_mapping)
+
+    assert [r.text for r in invoices.records] == [i.description for i in dataset.invoices]
+    assert [r.text for r in payments.records] == [p.memo or None for p in dataset.payments]
+
+
+def test_a_file_alone_finds_its_text_column_even_without_a_header_that_says_so(
+    tmp_path: Path,
+) -> None:
+    write_dataset(
+        generate_dataset(Config(seed=0, invoices=100)), tmp_path, ExportStyles("generic_columns")
+    )
+
+    proposal = propose_file(
+        profile_csv_bytes("i.csv", (tmp_path / "invoices.csv").read_bytes()), "invoices"
+    )
+
+    assert proposal.choice("text").column == "Column I"
+    assert proposal.choice("text").confident
+
+
+def test_when_several_columns_look_like_text_the_header_decides() -> None:
+    profile = profile_csv_bytes(
+        "p.csv",
+        b"id,payer name,note,ccy,amt\n"
+        b"P1,Acme Corp,paid by wire,USD,1.50\nP2,Globex Ltd,thank you very much,USD,2.50\n"
+        b"P3,Acme Corp,as agreed,USD,3.50\n",
+    )
+
+    proposal = propose_file(profile, "payments")
+
+    assert proposal.choice("text").column == "note"
+
+
+def test_two_columns_of_text_with_nothing_to_tell_them_apart_are_a_question() -> None:
+    profile = profile_csv_bytes(
+        "p.csv",
+        b"id,first,second,ccy,amt\n"
+        b"P1,some words here,other words there,USD,1.50\n"
+        b"P2,more words here,still other words,USD,2.50\n"
+        b"P3,even more words,last other words,USD,3.50\n",
+    )
+
+    text = propose_file(profile, "payments").choice("text")
+
+    assert not text.confident
+    assert text.column is None
+    assert set(text.alternatives) == {"first", "second"}
+
+
+def test_the_score_covers_the_text_field_and_a_file_without_one_is_not_penalised() -> None:
+    from recon.datagen.styles import INVOICE_STYLES
+    from recon.evaluation.mapping_score import score_file
+
+    truth = INVOICE_STYLES["default"].mapping()
+
+    outcomes = score_file(FileProposal(), truth)
+
+    assert outcomes["text"] == "correct"
+    assert outcomes["reference"] == "correct"

@@ -46,6 +46,7 @@ class ColumnProfile:
     amount_rates: dict[str, float]
     fraction_share: float
     currency_share: float
+    space_share: float
     shapes: tuple[tuple[str, int], ...]
     values: tuple[str, ...] = field(repr=False, compare=False)
 
@@ -109,6 +110,7 @@ class FileProfile:
                 "amount_decimal_separators": list(c.amount_separators()),
                 "share_with_fraction": round(c.fraction_share, 3),
                 "share_currency_codes": round(c.currency_share, 3),
+                "share_with_spaces": round(c.space_share, 3),
             }
             if samples:
                 distinct = list(dict.fromkeys(c.values))
@@ -204,6 +206,7 @@ def _profile_column(header: str, position: int, cells: tuple[str, ...]) -> Colum
         date_rates={f: _date_rate(sample, f) for f in DATE_FORMATS},
         amount_rates={s: _amount_rate(sample, s) for s in (".", ",")},
         fraction_share=fraction / len(sample) if sample else 0.0,
+        space_share=(sum(1 for v in sample if " " in v) / len(sample) if sample else 0.0),
         currency_share=(
             sum(1 for v in sample if v.upper() in CURRENCY_EXPONENTS) / len(sample)
             if sample

@@ -61,6 +61,7 @@ def answer_for(mapping: ColumnMapping, role: str, **overrides: Any) -> dict[str,
         "amount": field(mapping.amount),
         "currency": field(mapping.currency),
         "reference": field(mapping.reference if role == "payments" else None),
+        "text": field(mapping.text),
         "date_format": {"value": mapping.date_format, "confidence": "high", "reason": "test"},
         "decimal_separator": {
             "value": mapping.decimal_separator,
@@ -443,3 +444,39 @@ def test_the_default_description_still_holds_no_examples(tmp_path: Path) -> None
 
     assert "examples" not in json.dumps(profile.describe())
     assert user_message(profile, "invoices").count('"examples"') > 0
+
+
+def test_a_text_column_the_data_contradicts_is_downgraded(tmp_path: Path) -> None:
+    style = INVOICE_STYLES["erp_english"]
+    profile = profile_of("erp_english", "invoices", tmp_path)
+    answer = answer_for(style.mapping(), "invoices")
+    answer["text"]["column"] = "Invoice Date"  # a date column offered as free text
+
+    proposal = LlmMapper(FakeModel(answer)).propose_file(profile, "invoices")
+
+    assert proposal.choice("text").column is None
+    assert not proposal.choice("text").confident
+    assert "Invoice Date" in proposal.choice("text").alternatives
+
+
+def test_a_perfect_answer_includes_the_text_column_in_the_mapping(tmp_path: Path) -> None:
+    style = PAYMENT_STYLES["bank_statement"]
+    profile = profile_of("bank_statement", "payments", tmp_path)
+
+    proposal = LlmMapper(FakeModel(answer_for(style.mapping(), "payments"))).propose_file(
+        profile, "payments"
+    )
+
+    assert proposal.to_mapping() == style.mapping()
+    assert style.mapping().text == "Details"
+
+
+def test_the_description_of_a_file_says_how_much_of_each_column_is_several_words(
+    tmp_path: Path,
+) -> None:
+    profile = profile_of("erp_english", "invoices", tmp_path)
+
+    by_header = {c["header"]: c for c in profile.describe()["columns"]}
+
+    assert by_header["Description"]["share_with_spaces"] == 1.0
+    assert by_header["Invoice No"]["share_with_spaces"] == 0.0

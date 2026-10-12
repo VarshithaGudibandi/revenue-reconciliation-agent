@@ -25,6 +25,7 @@ from recon.mapping.llm_schema import (
 from recon.mapping.profile import ColumnProfile, FileProfile
 from recon.mapping.proposal import (
     FIELDS,
+    OPTIONAL_FIELDS,
     FieldChoice,
     FileProposal,
     ValueChoice,
@@ -59,6 +60,14 @@ def _reference_problem(c: ColumnProfile) -> str | None:
     return "its values are dates or amounts" if c.date_like() or c.amount_like() else None
 
 
+def _text_problem(c: ColumnProfile) -> str | None:
+    return (
+        "its values are dates, amounts or currency codes"
+        if (c.date_like() or c.amount_like() or c.currency_like())
+        else None
+    )
+
+
 CHECKS: dict[str, Callable[[ColumnProfile], str | None]] = {
     "record_id": _record_id_problem,
     "counterparty": _counterparty_problem,
@@ -66,6 +75,7 @@ CHECKS: dict[str, Callable[[ColumnProfile], str | None]] = {
     "amount": _amount_problem,
     "currency": _currency_problem,
     "reference": _reference_problem,
+    "text": _text_problem,
 }
 
 
@@ -81,7 +91,7 @@ def _choice(
         return field_choice(column, sure, others, reasons)
     if column is None:
         # "No column" is only an answer for the reference; for the rest it is a gap.
-        return field_choice(None, sure and name == "reference", others, reasons)
+        return field_choice(None, sure and name in OPTIONAL_FIELDS, others, reasons)
     problem = CHECKS[name](profile.column(column))
     if problem is not None:
         return field_choice(None, False, (column, *others), (*reasons, f"Data check: {problem}"))

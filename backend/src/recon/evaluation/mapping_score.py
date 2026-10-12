@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from typing import Literal
 
 from recon.ingestion.normalize import ColumnMapping
-from recon.mapping.proposal import FIELDS, FileProposal
+from recon.mapping.proposal import FIELDS, OPTIONAL_FIELDS, FileProposal
 
 Outcome = Literal["correct", "asked", "missed", "wrong"]
 FILE_OUTCOMES = ("exact", "needs_user", "missed", "wrong")
@@ -35,8 +35,8 @@ def score_file(proposal: FileProposal, truth: ColumnMapping) -> dict[str, Outcom
     expected = truth.model_dump()
     outcomes: dict[str, Outcome] = {}
     for field in FIELDS:
-        if field == "reference" and "reference" not in proposal.fields and expected[field] is None:
-            # A file with no reference column has nothing to say about it.
+        if field in OPTIONAL_FIELDS and field not in proposal.fields and expected[field] is None:
+            # A file with no such column has nothing to say about it.
             outcomes[field] = "correct"
             continue
         choice = proposal.choice(field)

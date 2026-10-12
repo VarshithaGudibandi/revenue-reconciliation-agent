@@ -334,6 +334,42 @@ def _dates(
     return side(inv_cands, 0), side(pay_cands, 1)
 
 
+TEXT_WORDS = (
+    "description",
+    "memo",
+    "detail",
+    "narrative",
+    "note",
+    "text",
+    "concepto",
+    "beschreibung",
+    "buchungstext",
+    "sgtxt",
+)
+
+
+def _text(pool: Sequence[ColumnProfile], taken: Sequence[str | None]) -> FieldChoice:
+    """The column of free text, if there is one: values that are mostly several words."""
+    candidates = [
+        c for c in pool if c.header not in taken and c.space_share >= 0.3 and c.distinct >= 2
+    ]
+    if not candidates:
+        return field_choice(None, True, reasons=("No column holds free text",))
+    if len(candidates) == 1:
+        return field_choice(
+            candidates[0].header,
+            True,
+            reasons=("The only column of values that are several words",),
+        )
+    scores = {c.header: float(lexicon_score(c.header, TEXT_WORDS, ())) for c in candidates}
+    choice = _choose(
+        scores, minimum=-100, margin=LEXICON_MARGIN, reason="The header text points to this field"
+    )
+    if choice.column is not None and scores[choice.column] <= 0:
+        return field_choice(None, False, tuple(scores), ("No header word points to this field",))
+    return choice
+
+
 def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProposal:
     inv_cur, pay_cur = _currency(invoices), _currency(payments)
     inv_sep, pay_sep = _separator(invoices, inv_cur.column), _separator(payments, pay_cur.column)
@@ -359,6 +395,8 @@ def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProp
         else []
     )
     inv_date, pay_date = _dates(invoices, payments, (set(), set()), links)
+    inv_text = _text(inv_rest, (inv_party.column, inv_id.column))
+    pay_text = _text(pay_rest, (pay_party.column, pay_id.column))
 
     return MappingProposal(
         invoices=FileProposal(
@@ -368,6 +406,7 @@ def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProp
                 "date": inv_date,
                 "amount": inv_amount,
                 "currency": inv_cur,
+                "text": inv_text,
             },
             date_format=_date_format_for(invoices, inv_date),
             decimal_separator=inv_sep,
@@ -380,6 +419,7 @@ def propose_mapping(invoices: FileProfile, payments: FileProfile) -> MappingProp
                 "amount": pay_amount,
                 "currency": pay_cur,
                 "reference": pay_ref,
+                "text": pay_text,
             },
             date_format=_date_format_for(payments, pay_date),
             decimal_separator=pay_sep,
@@ -436,10 +476,14 @@ def propose_file(profile: FileProfile, role: str) -> FileProposal:
         "amount": amount,
         "currency": currency,
     }
+    reference_column: str | None = None
     if role == "payments":
-        left = [c for c in rest if c.header != counterparty.column]
+        # A reference names an invoice; a column of sentences is free text, not a reference.
+        left = [c for c in rest if c.header != counterparty.column and c.space_share < 0.3]
         reference = _by_words(left, REFERENCE_WORDS, (), what="reference")
         fields["reference"] = reference
+        reference_column = reference.column
+    fields["text"] = _text(rest, (counterparty.column, record_id.column, reference_column))
     return FileProposal(
         fields=fields,
         date_format=_date_format_for(profile, date),

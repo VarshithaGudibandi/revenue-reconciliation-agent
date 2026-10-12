@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field
 
 from recon.ingestion.normalize import ColumnMapping
 
-FIELDS = ("record_id", "counterparty", "date", "amount", "currency", "reference")
+FIELDS = ("record_id", "counterparty", "date", "amount", "currency", "reference", "text")
+# Fields a file may have no column for.
+OPTIONAL_FIELDS = ("reference", "text")
 REQUIRED_FIELDS = ("record_id", "counterparty", "date", "amount", "currency")
 
 
@@ -84,6 +86,7 @@ class FileProposal(BaseModel, frozen=True):
             amount=columns["amount"] or "",
             currency=columns["currency"] or "",
             reference=columns["reference"],
+            text=columns["text"],
             date_format=self.date_format.value,
             decimal_separator=self.decimal_separator.value,
         )

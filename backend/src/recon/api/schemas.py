@@ -269,6 +269,7 @@ class MappingBody(BaseModel):
     amount: str = Field(min_length=1)
     currency: str = Field(min_length=1)
     reference: str | None = None
+    text: str | None = None
     date_format: str = Field(min_length=1)
     decimal_separator: Literal[".", ","]
 
