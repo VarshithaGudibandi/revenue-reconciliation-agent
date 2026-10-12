@@ -21,7 +21,7 @@ from recon.ingestion.normalize import ColumnMapping
 
 INVOICE_FIELDS = ("record_id", "counterparty", "date", "currency", "amount")
 PAYMENT_FIELDS = (*INVOICE_FIELDS, "reference")
-INVOICE_DISTRACTORS = ("due_date", "net_amount", "tax_amount", "status", "doc_type")
+INVOICE_DISTRACTORS = ("due_date", "net_amount", "tax_amount", "status", "doc_type", "memo")
 PAYMENT_DISTRACTORS = ("value_date", "bank_ref", "fee_amount")
 
 
@@ -38,12 +38,15 @@ class SourceStyle:
     date_format: str
     decimal_separator: str = "."
     thousands: bool = False
+    currency_case: str = "upper"
     required: tuple[str, ...] = field(init=False, repr=False)
     distractors: tuple[str, ...] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.source not in ("invoices", "payments"):
             raise ValueError(f"unknown source {self.source!r}")
+        if self.currency_case not in ("upper", "lower"):
+            raise ValueError("currency_case must be 'upper' or 'lower'")
         fields, distractors = (
             (INVOICE_FIELDS, INVOICE_DISTRACTORS)
             if self.source == "invoices"
@@ -99,9 +102,10 @@ def _style(
     *,
     decimal_separator: str = ".",
     thousands: bool = False,
+    currency_case: str = "upper",
 ) -> SourceStyle:
     columns = tuple(Column(key, header) for key, header in headers.items())
-    return SourceStyle(source, columns, date_format, decimal_separator, thousands)
+    return SourceStyle(source, columns, date_format, decimal_separator, thousands, currency_case)
 
 
 INVOICE_STYLES: dict[str, SourceStyle] = {
@@ -189,6 +193,22 @@ INVOICE_STYLES: dict[str, SourceStyle] = {
         },
         "%Y%m%d",
     ),
+    # Held out: modelled on publicly described layouts of accounting and payment products,
+    # added before the baseline mapper was written and never tuned against. The headers
+    # come from secondhand descriptions, not from an official export.
+    "xero_like": _style(
+        "invoices",
+        {
+            "counterparty": "*ContactName",
+            "record_id": "*InvoiceNumber",
+            "memo": "Reference",
+            "date": "*InvoiceDate",
+            "due_date": "*DueDate",
+            "currency": "Currency",
+            "amount": "Total",
+        },
+        "%d/%m/%Y",
+    ),
 }
 
 PAYMENT_STYLES: dict[str, SourceStyle] = {
@@ -259,7 +279,24 @@ PAYMENT_STYLES: dict[str, SourceStyle] = {
         },
         "%Y-%m-%d",
     ),
+    "stripe_like": _style(
+        "payments",
+        {
+            "record_id": "id",
+            "date": "Created (UTC)",
+            "amount": "Amount",
+            "currency": "Currency",
+            "fee_amount": "Fee",
+            "counterparty": "Customer ID",
+            "reference": "Description",
+        },
+        "%Y-%m-%d %H:%M:%S",
+        currency_case="lower",
+    ),
 }
+
+# Styles that were added to measure a mapper on layouts it was not built around.
+HELD_OUT_STYLES = {"invoices": ("xero_like",), "payments": ("stripe_like",)}
 
 
 @dataclass(frozen=True)
@@ -301,6 +338,10 @@ def _date(value: date, style: SourceStyle, salt: str) -> str:
     return moment.strftime(style.date_format)
 
 
+def _currency(code: str, style: SourceStyle) -> str:
+    return code.lower() if style.currency_case == "lower" else code
+
+
 def _money(minor: int, currency: str, style: SourceStyle) -> str:
     return format_amount(
         minor, currency, thousands=style.thousands, decimal_separator=style.decimal_separator
@@ -313,7 +354,7 @@ def _invoice_cell(key: str, invoice: Invoice, style: SourceStyle) -> str:
         "record_id": lambda: invoice.invoice_id,
         "counterparty": lambda: invoice.customer_id,
         "date": lambda: _date(invoice.issue_date, style, invoice.invoice_id),
-        "currency": lambda: invoice.currency,
+        "currency": lambda: _currency(invoice.currency, style),
         "amount": lambda: _money(invoice.total_minor, invoice.currency, style),
         "due_date": lambda: _date(
             invoice.issue_date + timedelta(days=30), style, invoice.invoice_id
@@ -321,6 +362,7 @@ def _invoice_cell(key: str, invoice: Invoice, style: SourceStyle) -> str:
         "tax_amount": lambda: _money(tax, invoice.currency, style),
         "net_amount": lambda: _money(invoice.total_minor - tax, invoice.currency, style),
         "status": lambda: "OPEN",
+        "memo": lambda: "Monthly services",
         "doc_type": lambda: "RV",
     }
     return cells[key]()
@@ -331,7 +373,7 @@ def _payment_cell(key: str, payment: Payment, style: SourceStyle) -> str:
         "record_id": lambda: payment.payment_id,
         "counterparty": lambda: payment.customer_id,
         "date": lambda: _date(payment.received_on, style, payment.payment_id),
-        "currency": lambda: payment.currency,
+        "currency": lambda: _currency(payment.currency, style),
         "amount": lambda: _money(payment.amount_minor, payment.currency, style),
         "reference": lambda: payment.reference,
         "value_date": lambda: _date(

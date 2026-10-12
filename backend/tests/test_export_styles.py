@@ -10,6 +10,7 @@ from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.model import Dataset
 from recon.datagen.styles import (
+    HELD_OUT_STYLES,
     INVOICE_STYLES,
     PAYMENT_STYLES,
     Column,
@@ -273,3 +274,16 @@ def test_a_format_without_day_and_month_is_never_ambiguous() -> None:
 
     assert not date_format_ambiguous([i.issue_date for i in dataset.invoices], "%Y-%m")
     assert not date_format_ambiguous([], "%d/%m/%Y")
+
+
+def test_held_out_styles_exist_and_a_file_can_carry_a_lowercase_currency(tmp_path: Path) -> None:
+    for source, registry in (("invoices", INVOICE_STYLES), ("payments", PAYMENT_STYLES)):
+        assert HELD_OUT_STYLES[source]
+        assert set(HELD_OUT_STYLES[source]) <= set(registry)
+
+    dataset = dataset_for(0)
+    write_dataset(dataset, tmp_path, ExportStyles(payments="stripe_like"))
+    currencies = set(read_columns(tmp_path / "payments.csv")["Currency"])
+
+    assert currencies == {"eur", "usd"}
+    assert {p.currency for p in dataset.payments} == {"EUR", "USD"}
