@@ -377,3 +377,19 @@ class CaseSync(Base):
     period: Mapped[str] = mapped_column(String(7), primary_key=True)
     run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("run.id"), nullable=False)
     synced_at: Mapped[datetime] = created_at()
+
+
+class IdempotencyRecord(Base):
+    """The stored response of a request that carried an idempotency key."""
+
+    __tablename__ = "idempotency_record"
+    __table_args__ = (
+        CheckConstraint(f"request_hash ~ '{SHA256_HEX}'", name="request_hash_format"),
+        CheckConstraint("(status_code IS NULL) = (response IS NULL)", name="response_complete"),
+    )
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status_code: Mapped[int | None] = mapped_column(Integer)
+    response: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = created_at()
