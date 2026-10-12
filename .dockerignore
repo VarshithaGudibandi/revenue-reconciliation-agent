@@ -1,0 +1,15 @@
+.git/
+.github/
+docs/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+backend/tests/
+backend/data/
+frontend/node_modules/
+frontend/dist/
+frontend/e2e/
+frontend/tsconfig.tsbuildinfo

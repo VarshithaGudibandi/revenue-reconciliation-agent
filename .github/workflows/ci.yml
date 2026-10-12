@@ -39,6 +39,28 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest
 
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Check the generated API types match the OpenAPI file
+        run: |
+          npm run api:types
+          git diff --exit-code src/api/schema.ts
+
   compose:
     runs-on: ubuntu-latest
     steps:
@@ -56,6 +78,23 @@ jobs:
           docker compose ps
           docker compose logs
           exit 1
+      - name: Check the app and the demo data are served
+        run: |
+          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet '<div id="root">'
+          curl --fail --silent http://127.0.0.1:8000/api/demo | grep --quiet '"corrected_files_loaded":false'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the browser test tooling
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run the browser tests against the running stack
+        working-directory: frontend
+        run: npx playwright test
       - name: Stop the stack
         if: always()
         run: docker compose down --volumes

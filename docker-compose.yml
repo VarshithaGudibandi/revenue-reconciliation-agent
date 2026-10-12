@@ -16,7 +16,9 @@ services:
       retries: 10
 
   migrate:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     command: ["alembic", "upgrade", "head"]
     environment:
       RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
@@ -24,15 +26,34 @@ services:
       postgres:
         condition: service_healthy
 
-  backend:
-    build: ./backend
+  seed:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "recon.demo"]
     environment:
       RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
-    ports:
-      - "127.0.0.1:8000:8000"
+    volumes:
+      - app-data:/data
     depends_on:
       migrate:
         condition: service_completed_successfully
 
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      RECON_DATABASE_URL: postgresql+psycopg://recon:${POSTGRES_PASSWORD:-recon}@postgres:5432/recon
+      RECON_DEMO: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - app-data:/data
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
 volumes:
   postgres-data:
+  app-data:

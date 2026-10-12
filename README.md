@@ -9,14 +9,15 @@ Two principles shape the design:
 
 ## Run locally
 
-Start Postgres, run the migrations and start the API:
-
 ```bash
 docker compose up --build
-curl http://127.0.0.1:8000/health/ready
 ```
 
-Run the backend checks against the compose Postgres:
+This starts Postgres, runs the migrations, loads a demo month of generated invoices and payments, and serves the API and the dashboard at <http://127.0.0.1:8000>. The demo has 400 invoices, about one in ten of which does not reconcile. The "Load corrected export" button in the demo banner loads a second payments file in which some of the problems are fixed at the source, so I can watch cases close and the ones that were not fixed stay open.
+
+The demo endpoints and the banner exist only when `RECON_DEMO=true`, which the compose file sets.
+
+### Backend checks
 
 ```bash
 docker compose up -d postgres
@@ -28,6 +29,23 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pyt
 
 The tests create and drop a scratch database for each test that needs one, so the database user must be allowed to create databases.
 
+### Frontend
+
+```bash
+cd frontend
+npm ci
+npm run dev          # Vite on :5173, proxying /api to a backend on :8000
+npm run lint && npm run typecheck && npm test && npm run build
+```
+
+The browser tests in `frontend/e2e` run against a server in demo mode that serves the built frontend (`RECON_STATIC_DIR=frontend/dist`) and has just been seeded with `python -m recon.demo`:
+
+```bash
+E2E_BASE_URL=http://127.0.0.1:8000 npx playwright test
+```
+
+They change the demo data (they load the corrected export), so seed again before running them a second time. CI runs them against the compose stack.
+
 ## How a run works
 
 A profile holds the column mappings for each source file and the matching thresholds. Registering a file stores its content as a new version, with a snapshot of its normalized records; rows that cannot be normalized are kept with the reason. A run reads the latest version of each file for a period.
@@ -37,6 +55,14 @@ When an earlier run exists with the same configuration, the new run compares the
 ## Cases
 
 Each exception becomes a case that is tracked across runs. A case follows a problem by the records it involves, so it keeps its notes and history while its amounts change. It closes by itself, as resolved, only when its records appear in a match in the data. I can report a fix, accept a variance with a reason and a note, reopen an accepted one, and add notes; I cannot mark a case resolved by hand. A reported fix is checked when new data arrives: if the problem is still there the case reopens with a flag. An accepted case comes back if the data behind it changes. Every transition is kept in an append-only log.
+
+## API and dashboard
+
+The API is under `/api`: profiles and periods, a per-period summary, the list of matches, the list of cases with filters, sorting and paging, one case with its records, history and notes, and the case actions (report fix, retract fix, accept, reopen, add note). Files are uploaded with a multipart request per source; when every source of a period is present the upload runs the reconciliation and updates the cases. Case actions take the version of the case I was looking at and fail with a 409 `stale_case` if it has changed, and they accept an `Idempotency-Key` header so a retried request is applied once. Errors all have the shape `{"error": {"code", "message"}}`.
+
+`frontend/openapi.json` is the committed OpenAPI description. A backend test fails when it no longer matches the app, and the frontend types in `frontend/src/api/schema.ts` are generated from it (`npm run api:types`); CI fails if they are out of date.
+
+The dashboard shows the share of invoices that reconciled, what is at stake by problem type and currency, and two tabs: cases that need attention, and invoices that reconciled. Every chart has a table view. Opening a case shows the records involved, an explanation, the history and notes. The explanations are written by rules from the records (`backend/src/recon/api/explain.py`); no language model is involved yet, and the interface says so.
 
 ## Synthetic data
 
