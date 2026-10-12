@@ -11,6 +11,8 @@ from recon.persistence.models import Job
 
 RECONCILE_PERIOD = "reconcile_period"
 SCAN_BUCKET = "scan_bucket"
+SEND_ALERTS = "send_alerts"
+SEND_DIGEST = "send_digest"
 
 
 def reconcile_key(profile_id: uuid.UUID, period: str) -> str:

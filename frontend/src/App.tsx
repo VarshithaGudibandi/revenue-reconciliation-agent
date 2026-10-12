@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePeriods, useProfiles } from "./api/hooks";
+import { Alerts } from "./components/Alerts";
 import { Dashboard } from "./components/Dashboard";
 import { DemoBanner } from "./components/DemoBanner";
 import { Setup } from "./components/Setup";
@@ -14,6 +15,7 @@ export function App() {
   const [theme, setTheme] = useTheme();
   const [uploading, setUploading] = useState(false);
   const [settingUp, setSettingUp] = useState(false);
+  const [alerting, setAlerting] = useState(false);
 
   const profileId =
     profiles.data?.find((p) => p.id === profileParam)?.id ?? profiles.data?.[0]?.id;
@@ -61,6 +63,9 @@ export function App() {
             New reconciliation
           </button>
         ) : null}
+        <button type="button" className="btn" onClick={() => setAlerting((on) => !on)} aria-pressed={alerting}>
+          Alerts
+        </button>
         <label className="field">
           <span className="sr-only">Theme</span>
           <select className="select" value={theme} onChange={(e) => setTheme(e.target.value as Theme)}>
@@ -78,6 +83,7 @@ export function App() {
             {profiles.error.message}
           </p>
         ) : null}
+        {alerting ? <Alerts onClose={() => setAlerting(false)} /> : null}
         {settingUp || (profiles.data && profiles.data.length === 0) ? (
           <Setup
             firstTime={!settingUp}
@@ -89,12 +95,12 @@ export function App() {
             }}
           />
         ) : null}
-        {!settingUp && profileId && periods.data && periods.data.length === 0 ? (
+        {!settingUp && !alerting && profileId && periods.data && periods.data.length === 0 ? (
           <section className="card">
             <p>No files have been added yet. Use “Add a file” to upload an invoices or payments export.</p>
           </section>
         ) : null}
-        {!settingUp && profileId && period ? <Dashboard key={`${profileId}-${period}`} profileId={profileId} period={period} /> : null}
+        {!settingUp && !alerting && profileId && period ? <Dashboard key={`${profileId}-${period}`} profileId={profileId} period={period} /> : null}
       </main>
 
       {uploading && profileId && period ? (

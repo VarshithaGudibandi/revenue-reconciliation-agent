@@ -1,6 +1,13 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { newIdempotencyKey } from "../lib/formatters";
-import { api, type CaseDetail, type CaseQuery, type MappingBody } from "./client";
+import {
+  api,
+  type CaseDetail,
+  type CaseQuery,
+  type ChannelBody,
+  type ChannelPatch,
+  type MappingBody,
+} from "./client";
 
 export const useProfiles = () => useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
 
@@ -129,3 +136,22 @@ export function useAskForSuggestion(caseId: string) {
     onSuccess: () => client.invalidateQueries({ queryKey: ["case", caseId] }),
   });
 }
+
+export const useChannels = () => useQuery({ queryKey: ["channels"], queryFn: api.channels });
+
+export const useDeliveries = () => useQuery({ queryKey: ["deliveries"], queryFn: api.deliveries });
+
+function useChannelChange<A, R>(run: (arg: A) => Promise<R>) {
+  const client = useQueryClient();
+  return useMutation<R, Error, A>({
+    mutationFn: run,
+    onSuccess: () =>
+      Promise.all(["channels", "deliveries"].map((key) => client.invalidateQueries({ queryKey: [key] }))),
+  });
+}
+
+export const useCreateChannel = () => useChannelChange((body: ChannelBody) => api.createChannel(body));
+export const useUpdateChannel = () =>
+  useChannelChange(({ id, patch }: { id: string; patch: ChannelPatch }) => api.updateChannel(id, patch));
+export const useDeleteChannel = () => useChannelChange((id: string) => api.deleteChannel(id));
+export const useTestChannel = () => useChannelChange((id: string) => api.testChannel(id));

@@ -364,6 +364,7 @@ def test_a_worker_scans_on_a_timer_and_then_reconciles(world: World) -> None:
 
     assert worker.run_once() == "succeeded"  # the scan
     assert worker.run_once() == "succeeded"  # the reconciliation it queued
+    assert worker.run_once() == "succeeded"  # the alerts that reconciliation queued
     assert worker.run_once() is None
     assert world.jobs(SCAN_BUCKET) == 1
 

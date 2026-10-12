@@ -14,6 +14,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Scope
 
 from recon.adjudication.service import build_adjudicator
+from recon.api.alerts import ChannelExistsError, UnknownChannelError
+from recon.api.alerts import router as alerts_router
 from recon.api.idempotency import IdempotencyKeyError
 from recon.api.routes import demo_router, router
 from recon.api.setup_routes import router as setup_router
@@ -53,6 +55,7 @@ def register_error_handlers(app: FastAPI) -> None:
         return error_response(404, "not_found", str(error))
 
     for exception in (
+        UnknownChannelError,
         UnknownJobError,
         CaseNotFoundError,
         UnknownProfileError,
@@ -77,6 +80,10 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(NotApplicableError)
     def not_applicable(_: Request, error: NotApplicableError) -> JSONResponse:
         return error_response(409, "not_applicable", str(error))
+
+    @app.exception_handler(ChannelExistsError)
+    def channel_exists(_: Request, error: ChannelExistsError) -> JSONResponse:
+        return error_response(409, "channel_exists", str(error))
 
     @app.exception_handler(ProfileExistsError)
     def profile_exists(_: Request, error: ProfileExistsError) -> JSONResponse:
@@ -157,6 +164,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok", "database": "ok"}
 
     app.include_router(router)
+    app.include_router(alerts_router)
     app.include_router(setup_router)
     if resolved.demo:
         app.include_router(demo_router)

@@ -43,3 +43,16 @@ class Settings(BaseSettings):
     s3_secret_key: SecretStr | None = None
     s3_prefix: str = ""
     s3_poll_seconds: float = 30.0
+    # Alerts. A link to the dashboard is added to a message when the public address is known.
+    public_url: str | None = None
+    # A webhook target must be https and must not resolve to a private address, so that a channel
+    # cannot be used to make the server call something inside its own network. Both can be
+    # relaxed for a local setup.
+    alerts_allow_http: bool = False
+    alerts_allow_private: bool = False
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_starttls: bool = True
+    smtp_from: str = "reconciliation@localhost"

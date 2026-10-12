@@ -19,6 +19,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -603,3 +604,62 @@ class IngestedObject(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AlertChannel(Base):
+    """Somewhere to send word of what a run found: an email address or a chat webhook.
+
+    The target is stored as given. A webhook URL is a secret and is not encrypted at rest; the
+    API shows it masked.
+    """
+
+    __tablename__ = "alert_channel"
+    __table_args__ = (
+        CheckConstraint("kind IN ('email', 'slack', 'teams')", name="kind_known"),
+        CheckConstraint(
+            "digest_hour IS NULL OR (digest_hour >= 0 AND digest_hour <= 23)",
+            name="digest_hour_range",
+        ),
+        CheckConstraint("name <> ''", name="name_not_empty"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    on_new_cases: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    digest_hour: Mapped[int | None] = mapped_column(SmallInteger)
+    created_at: Mapped[datetime] = created_at()
+
+
+class AlertDelivery(Base):
+    """One message to one channel, and how sending it went.
+
+    The unique key (channel, dedupe key) is what stops a retried job from sending twice. A
+    delivery is claimed before it is sent and marked after, so it is at-least-once: a worker that
+    dies between the send and the mark causes a second message when the claim expires.
+    """
+
+    __tablename__ = "alert_delivery"
+    __table_args__ = (
+        UniqueConstraint("channel_id", "dedupe_key", name="uq_alert_delivery_once"),
+        CheckConstraint("kind IN ('run', 'digest', 'test')", name="kind_known"),
+        CheckConstraint("status IN ('sending', 'sent', 'failed')", name="status_known"),
+        CheckConstraint("(status = 'sent') = (sent_at IS NOT NULL)", name="sent_iff_sent_at"),
+        CheckConstraint("status <> 'failed' OR error IS NOT NULL", name="failed_has_error"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    channel_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("alert_channel.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(Text, nullable=False)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    error: Mapped[str | None] = mapped_column(Text)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = created_at()

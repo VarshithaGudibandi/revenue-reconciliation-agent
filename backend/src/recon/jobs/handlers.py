@@ -2,14 +2,17 @@
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from recon.alerts.service import RetryableDeliveryError, send_digests, send_run_alerts
 from recon.config import Settings
 from recon.ingest.scan import scan_bucket
 from recon.ingest.store import ObjectStore
-from recon.jobs.kinds import RECONCILE_PERIOD, SCAN_BUCKET
+from recon.jobs import queue
+from recon.jobs.kinds import RECONCILE_PERIOD, SCAN_BUCKET, SEND_ALERTS, SEND_DIGEST
 from recon.jobs.worker import Handler, Permanent, Retry
 from recon.persistence.repository import check_period
 from recon.pipeline import reconcile_period
@@ -30,7 +33,22 @@ def handle_reconcile(sessions: sessionmaker[Session]) -> Handler:
         outcome = reconcile_period(sessions, profile_id, period)
         if outcome.run.status != "succeeded":
             raise Retry(f"the run is {outcome.run.status}, not finished")
-        return outcome.as_result()
+        result = outcome.as_result()
+        if result["cases"] is not None:
+            with sessions.begin() as session:
+                queue.enqueue(
+                    session,
+                    SEND_ALERTS,
+                    result["run"]["id"],
+                    {
+                        "profile_id": str(profile_id),
+                        "period": period,
+                        "run_id": result["run"]["id"],
+                        "cases": result["cases"],
+                    },
+                    now=datetime.now(UTC),
+                )
+        return result
 
     return handle
 
@@ -54,12 +72,35 @@ def handle_scan(sessions: sessionmaker[Session], store: ObjectStore, settings: S
     return handle
 
 
+def handle_alerts(sessions: sessionmaker[Session], settings: Settings) -> Handler:
+    def handle(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return dict(send_run_alerts(sessions, settings, payload, now=datetime.now(UTC)))
+        except RetryableDeliveryError as error:
+            raise Retry(str(error)) from error
+
+    return handle
+
+
+def handle_digest(sessions: sessionmaker[Session], settings: Settings) -> Handler:
+    def handle(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return dict(send_digests(sessions, settings, now=datetime.now(UTC)))
+        except RetryableDeliveryError as error:
+            raise Retry(str(error)) from error
+
+    return handle
+
+
 def handlers_for(
     sessions: sessionmaker[Session],
     store: ObjectStore | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Handler]:
     handlers = {RECONCILE_PERIOD: handle_reconcile(sessions)}
-    if store is not None and settings is not None:
-        handlers[SCAN_BUCKET] = handle_scan(sessions, store, settings)
+    if settings is not None:
+        handlers[SEND_ALERTS] = handle_alerts(sessions, settings)
+        handlers[SEND_DIGEST] = handle_digest(sessions, settings)
+        if store is not None:
+            handlers[SCAN_BUCKET] = handle_scan(sessions, store, settings)
     return handlers

@@ -8,6 +8,10 @@ export type MatchRow = Schemas["MatchRow"];
 export type PeriodSummary = Schemas["PeriodSummary"];
 export type Upload = Schemas["UploadOut"];
 export type Job = Schemas["JobOut"];
+export type Channel = Schemas["ChannelOut"];
+export type ChannelBody = Schemas["ChannelBody"];
+export type ChannelPatch = Schemas["ChannelPatch"];
+export type Delivery = Schemas["DeliveryOut"];
 export type AcceptReason = Schemas["AcceptBody"]["reason"];
 export type Proposal = Schemas["ProposalOut"];
 export type FileProposal = Schemas["FileProposalOut"];
@@ -55,6 +59,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       error?.current_version ?? undefined,
     );
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -166,6 +171,17 @@ export const api = {
     body: { name: string; invoices: MappingBody; payments: MappingBody },
   ) => post<Confirmation>(`/api/setup/proposals/${proposalId}/confirm`, body).then(settled),
   capabilities: () => request<Capabilities>("/api/capabilities"),
+  channels: () => request<Channel[]>("/api/alert-channels"),
+  createChannel: (body: ChannelBody) => post<Channel>("/api/alert-channels", body),
+  updateChannel: (id: string, body: ChannelPatch) =>
+    request<Channel>(`/api/alert-channels/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  deleteChannel: (id: string) => request<void>(`/api/alert-channels/${id}`, { method: "DELETE" }),
+  testChannel: (id: string) => request<Delivery>(`/api/alert-channels/${id}/test`, { method: "POST" }),
+  deliveries: () => request<Delivery[]>("/api/alert-deliveries"),
   askForExplanation: (caseId: string) =>
     request<AskedExplanation>(`/api/cases/${caseId}/explanation`, { method: "POST" }),
   askForSuggestion: (caseId: string) =>

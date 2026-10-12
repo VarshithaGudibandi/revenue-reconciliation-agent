@@ -11,7 +11,7 @@ from recon.config import Settings
 from recon.db import create_db_engine
 from recon.ingest.store import S3Store
 from recon.jobs.handlers import handlers_for
-from recon.jobs.kinds import SCAN_BUCKET
+from recon.jobs.kinds import SCAN_BUCKET, SEND_DIGEST
 from recon.jobs.worker import Periodic, Worker
 
 
@@ -21,7 +21,9 @@ def main() -> None:
     engine = create_db_engine(settings.database_url)
     sessions = sessionmaker(engine)
     store = None
-    periodic: list[Periodic] = []
+    periodic: list[Periodic] = [
+        Periodic(SEND_DIGEST, "digest", {}, timedelta(minutes=10)),
+    ]
     if settings.s3_bucket:
         store = S3Store(
             settings.s3_bucket,

@@ -385,3 +385,47 @@ class ConfirmOut(BaseModel):
     run: RunOut | None
     cases: SyncOut | None
     job: JobOut | None = None
+
+
+class DeliveryOut(BaseModel):
+    id: uuid.UUID
+    channel_id: uuid.UUID
+    channel_name: str
+    kind: Literal["run", "digest", "test"]
+    subject: str
+    status: Literal["sending", "sent", "failed"]
+    attempts: int
+    error: str | None
+    created_at: datetime
+    sent_at: datetime | None
+
+
+class ChannelOut(BaseModel):
+    """Where alerts go. The target is masked: a webhook URL is a secret."""
+
+    id: uuid.UUID
+    name: str
+    kind: Literal["email", "slack", "teams"]
+    target: str
+    enabled: bool
+    on_new_cases: bool
+    digest_hour: int | None
+    created_at: datetime
+    last_delivery: DeliveryOut | None
+
+
+class ChannelBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    kind: Literal["email", "slack", "teams"]
+    target: str = Field(min_length=3, max_length=2000)
+    enabled: bool = True
+    on_new_cases: bool = True
+    digest_hour: int | None = Field(default=None, ge=0, le=23)
+
+
+class ChannelPatch(BaseModel):
+    """Only the fields that are sent change. A ``digest_hour`` of null turns the digest off."""
+
+    enabled: bool | None = None
+    on_new_cases: bool | None = None
+    digest_hour: int | None = Field(default=None, ge=0, le=23)

@@ -91,6 +91,20 @@ The worker queues a `scan_bucket` job every poll interval (several workers may d
 
 Not covered: an object is read whole into memory, so the size limit (`RECON_MAX_UPLOAD_MB`) matters; there is no notification from the bucket, only polling; and an object deleted from the bucket does not remove anything that was registered from it.
 
+## Alerts
+
+`Alerts` in the header sets up where messages go: a Slack or Teams webhook or an email address. A channel gets a message in two cases, each of which it can switch off: after a run that opens or reopens exceptions (how many, what is open now and the amount at stake by currency, with a link to the period), and once a day as a digest of everything open, at an hour of its choosing in UTC. A worker that was down at that hour sends the digest when it is back, and no digest is sent when nothing is open. "Send a test" sends a message now and shows how it went; the page lists the latest messages with their result and, for a failure, the reason.
+
+After a reconciliation job succeeds the worker queues a `send_alerts` job for that run, and a timer queues `send_digest` every ten minutes. Both are jobs on the queue described above, so a failed send is retried with backoff. What stops a retry from sending twice is `alert_delivery`, which has one row per channel and event (`run:<run id>`, `digest:<date>`): a delivery is claimed before it is sent and marked afterwards. This makes delivery at-least-once, not exactly-once: a worker that dies between the send and the mark causes a second message when the claim expires after two minutes. Reconciling the same files again is the same run and sends nothing new. An error that cannot pass (a revoked webhook, a refused address) is recorded and not retried; a timeout, a refused connection, a 429 or a 5xx is.
+
+A webhook URL is typed in by whoever sets up the channel and the server posts to it, so it is checked. It must be https and must not resolve to a loopback, private, link-local or otherwise internal address, which stops a channel from being used to reach services on the server's own network. Redirects are not followed. The check is made again when sending. It resolves the name here and the HTTP client resolves it again, so a hostile DNS server could answer differently the second time; I have not closed that. `RECON_ALERTS_ALLOW_HTTP` and `RECON_ALERTS_ALLOW_PRIVATE` relax the checks for a local setup, and the tests use them.
+
+Email goes through the SMTP server named by `RECON_SMTP_HOST` (`RECON_SMTP_PORT`, `RECON_SMTP_USER`, `RECON_SMTP_PASSWORD`, `RECON_SMTP_STARTTLS`, `RECON_SMTP_FROM`); without one an email channel cannot be created. `RECON_PUBLIC_URL` is the address put in the links.
+
+The Slack message is `{"text": …}` for an incoming webhook. The Teams message is an Adaptive Card in a `message`, which is the format a Teams Workflows webhook takes after Microsoft's retirement of the old connectors; I wrote it from Microsoft's description and community examples and have not sent it to a Teams tenant, so it is untested against the real service. Slack is likewise tested against a local server that records what it receives, not against Slack. Email is tested against a real SMTP server run in the tests.
+
+Not covered: webhook URLs are stored as typed in the database, not encrypted, and shown masked; there is no one-click unsubscribe, rate limit or quiet hours; the digest is UTC only; and the page has no way to edit a channel's target, only to delete and add it again.
+
 ## Cases
 
 Each exception becomes a case that is tracked across runs. A case follows a problem by the records it involves, so it keeps its notes and history while its amounts change. It closes by itself, as resolved, only when its records appear in a match in the data. I can report a fix, accept a variance with a reason and a note, reopen an accepted one, and add notes; I cannot mark a case resolved by hand. A reported fix is checked when new data arrives: if the problem is still there the case reopens with a flag. An accepted case comes back if the data behind it changes. Every transition is kept in an append-only log.
