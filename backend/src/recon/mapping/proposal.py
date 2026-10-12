@@ -12,12 +12,6 @@ FIELDS = ("record_id", "counterparty", "date", "amount", "currency", "reference"
 # Fields a file may have no column for.
 OPTIONAL_FIELDS = ("reference", "text")
 REQUIRED_FIELDS = ("record_id", "counterparty", "date", "amount", "currency")
-SETTING_NAMES = ("date_format", "decimal_separator")
-
-
-def asked_fields(source: str) -> tuple[str, ...]:
-    """The fields a file of this kind is asked about: only payments can carry a reference."""
-    return FIELDS if source == "payments" else tuple(f for f in FIELDS if f != "reference")
 
 
 class FieldChoice(BaseModel, frozen=True):
@@ -76,12 +70,6 @@ class FileProposal(BaseModel, frozen=True):
             and self.decimal_separator.confident
         )
 
-    def open_items(self, source: str) -> list[str]:
-        """What is still to be answered for this file: fields and settings that are not sure."""
-        fields = [f for f in asked_fields(source) if not self.choice(f).confident]
-        settings = [n for n in SETTING_NAMES if not getattr(self, n).confident]
-        return fields + settings
-
     def to_mapping(self) -> ColumnMapping | None:
         """The mapping this proposal describes, or None when a required part is missing."""
         columns = {f: self.choice(f).column for f in FIELDS}
@@ -107,11 +95,3 @@ class FileProposal(BaseModel, frozen=True):
 class MappingProposal(BaseModel, frozen=True):
     invoices: FileProposal
     payments: FileProposal
-
-    def open_items(self) -> list[tuple[str, str]]:
-        """Every open question as (file, field or setting): invoices first, then payments."""
-        return [
-            (source, item)
-            for source in ("invoices", "payments")
-            for item in getattr(self, source).open_items(source)
-        ]
