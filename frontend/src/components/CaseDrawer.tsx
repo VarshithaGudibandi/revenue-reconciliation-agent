@@ -6,6 +6,7 @@ import { EVENT_LABELS, KIND_LABELS, REASON_LABELS, label } from "../lib/labels";
 import { StatusBadge } from "./Badges";
 import { AcceptDialog } from "./Dialogs";
 import { CloseIcon } from "./Icons";
+import { ExplanationSection } from "./ExplanationSection";
 import { SuggestionSection } from "./SuggestionSection";
 
 function Notice({ tone, children }: { tone?: "warning" | "critical" | "good"; children: React.ReactNode }) {
@@ -144,6 +145,13 @@ export function CaseDrawer({
                 Written by rules from the records, not generated.
               </p>
             </section>
+
+            <ExplanationSection
+              key={data.explanation?.summary ?? "none"}
+              caseId={caseId}
+              explanation={data.explanation ?? null}
+              canAskModel={capabilities.data?.explainer.model != null}
+            />
 
             {data.suggestion ? (
               <SuggestionSection

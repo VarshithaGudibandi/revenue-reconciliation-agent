@@ -151,6 +151,23 @@ class AnalysisOut(BaseModel):
     next_steps: list[str]
 
 
+class ExplanationOut(BaseModel):
+    """A language model's reading of a case. Shown only after every figure, record and id in it
+    was checked against the case."""
+
+    model: str
+    summary: str
+    why: str
+    next_steps: list[str]
+
+
+class AskExplanationOut(BaseModel):
+    """The answer to asking for an explanation: the checked text, or why there is none."""
+
+    explanation: ExplanationOut | None
+    problems: list[str]
+
+
 class SuggestionOut(BaseModel):
     """Which invoice an ambiguous payment was probably meant for. Advice for a person, never a
     match: nothing is changed by it."""
@@ -174,6 +191,7 @@ class CapabilitiesOut(BaseModel):
 
     mapper: ToolOut
     adjudicator: ToolOut
+    explainer: ToolOut
 
 
 class CaseDetailOut(BaseModel):
@@ -195,6 +213,7 @@ class CaseDetailOut(BaseModel):
     updated_at: datetime
     analysis: AnalysisOut
     suggestion: SuggestionOut | None = None
+    explanation: ExplanationOut | None = None
     records: list[RecordOut]
     events: list[EventOut]
     notes: list[NoteOut]

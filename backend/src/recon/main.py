@@ -20,6 +20,7 @@ from recon.api.setup_routes import router as setup_router
 from recon.api.suggestions import NotApplicableError
 from recon.config import Settings
 from recon.db import create_db_engine
+from recon.explanation.service import build_explainer
 from recon.ingestion.normalize import MappingError
 from recon.mapping.service import build_mapper
 from recon.persistence.case_actions import (
@@ -136,6 +137,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.sessions = sessionmaker(engine)
     app.state.mapper = build_mapper(resolved)
     app.state.adjudicator = build_adjudicator(resolved)
+    app.state.explainer = build_explainer(resolved)
     register_error_handlers(app)
 
     @app.get("/health")

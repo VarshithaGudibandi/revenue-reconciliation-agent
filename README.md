@@ -127,6 +127,16 @@ The rules are never confidently wrong. No adjudicator can do better than abstain
 
 In the application, the free text of a record is an optional column in the mapping (shown as Description for invoices and Payment memo for payments), stored with each record and shown under it in the case view. Every ambiguous-payment case carries a suggestion: the rules' reading of the memo, computed when the case is opened. When a language model is configured, "Ask the model" (`POST /api/cases/{id}/suggestion`) asks it once for what the case holds now and keeps the answer for that exact input, so asking again costs nothing and a changed file is a new question. The case view says who read the memo, quotes the words the suggestion rests on, and marks a suggestion the rules could not settle as "A suggestion, not settled". `GET /api/capabilities` says whether a model is configured. Nothing about a case changes because of a suggestion; the next step stays correcting the reference at the source.
 
+## Explaining a case with a model
+
+Every case has a reading written by rules from its records (`api/explain.py`). When a language model is configured, "Explain with the model" (`POST /api/cases/{id}/explanation`) asks it for a second one, shown under the first. A model's text is only shown if a program has checked it, which is the point of `explanation/`.
+
+The model is told the kind of exception, the difference the engine calculated, and each record's amount, date and free text, with the records labelled `R1`, `R2`. It is not given the customer or the real ids, and it must refer to a record only as `[R1]`. Customer names and ids can still reach it if a payer wrote them in a memo. `verify` then rejects the text if it cites a label that is not in the case, states a number that is not one of the engine's figures (the amounts, their totals, the record counts, the parts of a date, or a number a record's own text contains), writes out an id that no record text contains, cites no record, or is longer than its limits. Accepted text has the labels replaced by the real ids. Anything rejected is not shown; the response lists what failed and the rule-written reading stands.
+
+A verified explanation is kept for the exact input it read (`case_explanation`), so asking again costs nothing and a changed file is a new question. A rejected attempt is kept as a record but not reused, so asking again asks again. What the check cannot do: it confirms that the figures and records are the engine's, not that the sentence built from them is wise. A sentence can use only true numbers and still point the reader at the wrong thing, so the text is labelled with who wrote it and what was checked, and says nothing was changed.
+
+There are no recorded model answers in this repository yet, so there is no measured rejection rate; the tests use a scripted model that explains faithfully, and one that invents a figure.
+
 ## Synthetic data
 
 The repository is public, so it only uses generated data. The generator writes an invoice export and a payment export with a known set of problems, a ground-truth file, and a second revision in which some of the problems are fixed at the source:

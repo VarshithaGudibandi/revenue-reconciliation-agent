@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from recon.adjudication.service import AdjudicatorChoice
 from recon.api import queries
+from recon.api.explanations import ask_explainer
 from recon.api.idempotency import request_hash, run_once, validate_key
 from recon.api.schemas import (
     AcceptBody,
     ActionBody,
+    AskExplanationOut,
     CapabilitiesOut,
     CaseDetailOut,
     CasePage,
@@ -33,6 +35,7 @@ from recon.api.schemas import (
 from recon.api.suggestions import ask_adjudicator
 from recon.config import Settings
 from recon.demo import DEMO_PERIOD, demo_state, load_corrected_export
+from recon.explanation.service import ExplainerChoice
 from recon.persistence.case_actions import (
     AcceptReason,
     accept_variance,
@@ -78,6 +81,14 @@ def get_adjudicator(request: Request) -> AdjudicatorChoice:
 
 
 Adjudicator = Annotated[AdjudicatorChoice, Depends(get_adjudicator)]
+
+
+def get_explainer(request: Request) -> ExplainerChoice:
+    explainer: ExplainerChoice = request.app.state.explainer
+    return explainer
+
+
+Explainer = Annotated[ExplainerChoice, Depends(get_explainer)]
 Sessions = Annotated[sessionmaker[Session], Depends(get_sessions)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
 
@@ -145,13 +156,16 @@ def cases(
 
 
 @router.get("/capabilities", response_model=CapabilitiesOut)
-def capabilities(request: Request, adjudicator: Adjudicator) -> CapabilitiesOut:
+def capabilities(
+    request: Request, adjudicator: Adjudicator, explainer: Explainer
+) -> CapabilitiesOut:
     """Who proposes mappings and who suggests invoices, and whether a language model is one of
     them."""
     mapper = request.app.state.mapper
     return CapabilitiesOut(
         mapper=ToolOut(name=mapper.name, model=mapper.model),
         adjudicator=ToolOut(name=adjudicator.name, model=adjudicator.model),
+        explainer=ToolOut(name=explainer.name, model=explainer.model),
     )
 
 
@@ -165,6 +179,20 @@ def ask_for_suggestion(
     once for what the case holds now; asking again returns what was kept.
     """
     return ask_adjudicator(sessions, case_id, adjudicator)
+
+
+@router.post("/cases/{case_id}/explanation", response_model=AskExplanationOut)
+def ask_for_explanation(
+    case_id: uuid.UUID, sessions: Sessions, explainer: Explainer
+) -> AskExplanationOut:
+    """Ask a language model to explain the case.
+
+    Advice only: nothing about the case changes. The text is returned only if every record it
+    cites, every figure it states and every id in it checks out against the case; otherwise the
+    reasons are returned and the rule-written reading stands. A checked answer is kept, and
+    asking again for the same input returns it.
+    """
+    return ask_explainer(sessions, case_id, explainer)
 
 
 @router.get("/cases/{case_id}", response_model=CaseDetailOut)

@@ -109,6 +109,34 @@
         "title": "AnalysisOut",
         "type": "object"
       },
+      "AskExplanationOut": {
+        "description": "The answer to asking for an explanation: the checked text, or why there is none.",
+        "properties": {
+          "explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplanationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "explanation",
+          "problems"
+        ],
+        "title": "AskExplanationOut",
+        "type": "object"
+      },
       "Body_propose_api_setup_proposals_post": {
         "properties": {
           "invoices": {
@@ -154,13 +182,17 @@
           "adjudicator": {
             "$ref": "#/components/schemas/ToolOut"
           },
+          "explainer": {
+            "$ref": "#/components/schemas/ToolOut"
+          },
           "mapper": {
             "$ref": "#/components/schemas/ToolOut"
           }
         },
         "required": [
           "mapper",
-          "adjudicator"
+          "adjudicator",
+          "explainer"
         ],
         "title": "CapabilitiesOut",
         "type": "object"
@@ -203,6 +235,16 @@
             },
             "title": "Events",
             "type": "array"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplanationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "fix_unverified": {
             "title": "Fix Unverified",
@@ -743,6 +785,38 @@
           "created_at"
         ],
         "title": "EventOut",
+        "type": "object"
+      },
+      "ExplanationOut": {
+        "description": "A language model's reading of a case. Shown only after every figure, record and id in it\nwas checked against the case.",
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "next_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "summary",
+          "why",
+          "next_steps"
+        ],
+        "title": "ExplanationOut",
         "type": "object"
       },
       "FileOut": {
@@ -2037,6 +2111,77 @@
           }
         },
         "summary": "Post Accept"
+      }
+    },
+    "/api/cases/{case_id}/explanation": {
+      "post": {
+        "description": "Ask a language model to explain the case.\n\nAdvice only: nothing about the case changes. The text is returned only if every record it\ncites, every figure it states and every id in it checks out against the case; otherwise the\nreasons are returned and the rule-written reading stands. A checked answer is kept, and\nasking again for the same input returns it.",
+        "operationId": "ask_for_explanation_api_cases__case_id__explanation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskExplanationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Ask For Explanation"
       }
     },
     "/api/cases/{case_id}/notes": {

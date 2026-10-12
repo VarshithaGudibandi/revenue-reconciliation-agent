@@ -9,6 +9,7 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from recon.api.explain import RecordFacts, explain
+from recon.api.explanations import current_explanation
 from recon.api.records import RecordKey, source_records
 from recon.api.schemas import (
     Amount,
@@ -449,6 +450,7 @@ def case_detail_out(session: Session, case_id: uuid.UUID) -> CaseDetailOut:
         created_at=case.created_at,
         updated_at=case.updated_at,
         suggestion=current_suggestion(session, case_id),
+        explanation=current_explanation(session, case_id),
         analysis=AnalysisOut(
             summary=explanation.summary,
             why=explanation.why,

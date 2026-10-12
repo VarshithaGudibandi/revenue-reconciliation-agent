@@ -457,3 +457,41 @@ class CaseSuggestion(Base):
     model: Mapped[str | None] = mapped_column(Text)
     ruling: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = created_at()
+
+
+class CaseExplanation(Base):
+    """An explanation a language model wrote for a case, kept for the exact input it read.
+
+    Only a verified one is reused; a rejected attempt is kept with what the checks found.
+    """
+
+    __tablename__ = "case_explanation"
+    __table_args__ = (
+        Index(
+            "uq_case_explanation_verified",
+            "case_id",
+            "input_hash",
+            "prompt_version",
+            unique=True,
+            postgresql_where=text("verified"),
+        ),
+        CheckConstraint(f"input_hash ~ '{SHA256_HEX}'", name="input_hash_format"),
+        CheckConstraint(
+            "verified = (summary IS NOT NULL AND why IS NOT NULL AND next_steps IS NOT NULL)",
+            name="text_iff_verified",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("exception_case.id", ondelete="CASCADE"), nullable=False
+    )
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    verified: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    why: Mapped[str | None] = mapped_column(Text)
+    next_steps: Mapped[list[str] | None] = mapped_column(JSONB)
+    problems: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = created_at()

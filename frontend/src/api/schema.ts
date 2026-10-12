@@ -59,6 +59,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cases/{case_id}/explanation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask For Explanation
+         * @description Ask a language model to explain the case.
+         *
+         *     Advice only: nothing about the case changes. The text is returned only if every record it
+         *     cites, every figure it states and every id in it checks out against the case; otherwise the
+         *     reasons are returned and the rule-written reading stands. A checked answer is kept, and
+         *     asking again for the same input returns it.
+         */
+        post: operations["ask_for_explanation_api_cases__case_id__explanation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/{case_id}/notes": {
         parameters: {
             query?: never;
@@ -454,6 +479,15 @@ export interface components {
             /** Why */
             why: string;
         };
+        /**
+         * AskExplanationOut
+         * @description The answer to asking for an explanation: the checked text, or why there is none.
+         */
+        AskExplanationOut: {
+            explanation: components["schemas"]["ExplanationOut"] | null;
+            /** Problems */
+            problems: string[];
+        };
         /** Body_propose_api_setup_proposals_post */
         Body_propose_api_setup_proposals_post: {
             /** Invoices */
@@ -474,6 +508,7 @@ export interface components {
          */
         CapabilitiesOut: {
             adjudicator: components["schemas"]["ToolOut"];
+            explainer: components["schemas"]["ToolOut"];
             mapper: components["schemas"]["ToolOut"];
         };
         /** CaseDetailOut */
@@ -490,6 +525,7 @@ export interface components {
             created_at: string;
             /** Events */
             events: components["schemas"]["EventOut"][];
+            explanation?: components["schemas"]["ExplanationOut"] | null;
             /** Fix Unverified */
             fix_unverified: boolean;
             /**
@@ -656,6 +692,21 @@ export interface components {
             run_id: string | null;
             /** To Status */
             to_status: string | null;
+        };
+        /**
+         * ExplanationOut
+         * @description A language model's reading of a case. Shown only after every figure, record and id in it
+         *     was checked against the case.
+         */
+        ExplanationOut: {
+            /** Model */
+            model: string;
+            /** Next Steps */
+            next_steps: string[];
+            /** Summary */
+            summary: string;
+            /** Why */
+            why: string;
         };
         /** FileOut */
         FileOut: {
@@ -1162,6 +1213,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseDetailOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    ask_for_explanation_api_cases__case_id__explanation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskExplanationOut"];
                 };
             };
             /** @description The profile, period or case does not exist. */

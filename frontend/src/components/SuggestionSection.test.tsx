@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Suggestion } from "../api/client";
-import { caseDetail, mockApi, renderWithClient, suggestionFixture } from "../test/helpers";
+import { capabilities, caseDetail, mockApi, renderWithClient, suggestionFixture } from "../test/helpers";
 import { CaseDrawer } from "./CaseDrawer";
 import { SuggestionSection } from "./SuggestionSection";
 
@@ -92,9 +92,7 @@ describe("SuggestionSection", () => {
     });
     const { calls } = mockApi({
       "GET /api/cases/case-1": () => ({ body: current }),
-      "GET /api/capabilities": {
-        body: { mapper: { name: "rules and model", model: "m" }, adjudicator: { name: "rules and model", model: "m" } },
-      },
+      "GET /api/capabilities": { body: capabilities("m") },
       "POST /api/cases/case-1/suggestion": () => {
         current = caseDetail({ kind: "ambiguous_payment", suggestion: withModel });
         return { body: withModel };
@@ -117,9 +115,7 @@ describe("SuggestionSection", () => {
           suggestion: suggestionFixture({ invoice_id: null, confident: false }),
         }),
       },
-      "GET /api/capabilities": {
-        body: { mapper: { name: "rules", model: null }, adjudicator: { name: "rules and model", model: "m" } },
-      },
+      "GET /api/capabilities": { body: capabilities("m") },
       "POST /api/cases/case-1/suggestion": {
         status: 409,
         body: { error: { code: "not_applicable", message: "only an ambiguous payment can be asked about" } },
@@ -150,9 +146,7 @@ describe("SuggestionSection", () => {
           ],
         }),
       },
-      "GET /api/capabilities": {
-        body: { mapper: { name: "rules", model: null }, adjudicator: { name: "rules", model: null } },
-      },
+      "GET /api/capabilities": { body: capabilities() },
     });
     renderWithClient(<CaseDrawer caseId="case-1" onClose={() => {}} onOpenCase={() => {}} />);
 

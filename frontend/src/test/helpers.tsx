@@ -176,4 +176,15 @@ export function suggestionFixture(overrides: Record<string, unknown> = {}) {
 export const capabilities = (model: string | null = null) => ({
   mapper: { name: model ? "rules and model" : "rules", model },
   adjudicator: { name: model ? "rules and model" : "rules", model },
+  explainer: { name: model ? "model, checked" : "rules", model },
 });
+
+export function explanationFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    model: "claude-opus-5-5",
+    summary: "INV-1 is paid 100.00 USD short.",
+    why: "PAY-1 paid 900.00 USD against an invoice of 1,000.00 USD.",
+    next_steps: ["Ask whether a credit note covers the 100.00 USD."],
+    ...overrides,
+  };
+}

@@ -602,6 +602,15 @@ table.table {
   border-left: 3px solid var(--axis);
 }
 
+.notice p {
+  margin: 0;
+}
+
+.notice ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 .notice-warning {
   border-left-color: var(--warning);
 }

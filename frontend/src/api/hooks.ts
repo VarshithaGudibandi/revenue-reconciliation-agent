@@ -112,6 +112,16 @@ export function useConfirm(proposalId: string) {
 export const useCapabilities = () =>
   useQuery({ queryKey: ["capabilities"], queryFn: api.capabilities, staleTime: Infinity });
 
+export function useAskForExplanation(caseId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.askForExplanation(caseId),
+    onSuccess: (asked) => {
+      if (asked.explanation) void client.invalidateQueries({ queryKey: ["case", caseId] });
+    },
+  });
+}
+
 export function useAskForSuggestion(caseId: string) {
   const client = useQueryClient();
   return useMutation({

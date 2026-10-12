@@ -308,6 +308,7 @@ def test_the_interface_can_ask_who_makes_the_suggestions(world: World, tmp_path:
     assert plain == {
         "mapper": {"name": "rules", "model": None},
         "adjudicator": {"name": "rules", "model": None},
+        "explainer": {"name": "rules", "model": None},
     }
     assert both["adjudicator"] == {"name": "rules and model", "model": "claude-opus-5-5"}
     assert both["mapper"]["name"] == "rules and model"
