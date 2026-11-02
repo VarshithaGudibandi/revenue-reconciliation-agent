@@ -33,4 +33,4 @@ def build_adjudicator(settings: Settings) -> AdjudicatorChoice:
     def hybrid(case: AdjudicationCase) -> Ruling:
         return combine_rulings(adjudicate_by_rules(case), llm.adjudicate(case))
 
-    return AdjudicatorChoice("rules and model", settings.llm_model, hybrid)
+    return AdjudicatorChoice("rules and model", settings.llm_model_name(), hybrid)

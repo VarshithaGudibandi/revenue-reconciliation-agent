@@ -21,7 +21,7 @@ from recon.evaluation.adjudication_eval import (
     judge,
     run_evaluation,
 )
-from recon.mapping.llm_client import Completion, LlmRefusal
+from recon.llm.client import Completion, LlmRefusal
 
 
 def case(memo: str, *descriptions: str) -> AdjudicationCase:

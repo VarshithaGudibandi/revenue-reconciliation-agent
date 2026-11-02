@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from recon.llm.providers import Provider, find_key, model_for
+
 
 class Settings(BaseSettings):
     """Runtime configuration, read from RECON_* environment variables."""
@@ -18,10 +20,17 @@ class Settings(BaseSettings):
     demo: bool = False
     # A built frontend to serve at the root, if present.
     static_dir: Path | None = None
-    # Who proposes column mappings. "auto" uses the language model when credentials are
-    # present and the rules alone otherwise; "rules" never calls a model; "hybrid" requires one.
+    # Who proposes column mappings. "auto" uses the language model when a key is present and
+    # the rules alone otherwise; "rules" never calls a model; "hybrid" requires one.
     mapper: Literal["auto", "rules", "hybrid"] = "auto"
-    llm_model: str = "claude-opus-5-5"
+    # Which language model. The key is RECON_LLM_API_KEY or the provider's usual variable
+    # (GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY). The model defaults per provider;
+    # the base URL points "openai" at any server that speaks that protocol.
+    llm_provider: Provider = "gemini"
+    llm_model: str | None = None
+    llm_api_key: SecretStr | None = None
+    llm_base_url: str | None = None
+    # Anthropic only: how hard the model thinks, and server-side refusal fallbacks.
     llm_effort: Literal["low", "medium", "high"] = "low"
     llm_fallbacks: bool = True
     # Serve model answers recorded earlier instead of calling the API.
@@ -61,3 +70,10 @@ class Settings(BaseSettings):
     retention_proposals_days: int = 7
     retention_idempotency_days: int = 7
     retention_deliveries_days: int = 90
+
+    def llm_key(self) -> str | None:
+        configured = self.llm_api_key.get_secret_value() if self.llm_api_key else None
+        return find_key(self.llm_provider, configured)
+
+    def llm_model_name(self) -> str:
+        return model_for(self.llm_provider, self.llm_model)

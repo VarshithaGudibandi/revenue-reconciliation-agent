@@ -12,7 +12,7 @@ from recon.explanation.schema import (
     user_message,
 )
 from recon.explanation.verify import render, verify
-from recon.mapping.llm_client import JsonModel, LlmError
+from recon.llm.client import JsonModel, LlmError
 
 
 @dataclass(frozen=True)

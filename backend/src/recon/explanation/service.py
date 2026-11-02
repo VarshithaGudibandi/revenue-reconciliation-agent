@@ -25,4 +25,4 @@ def build_explainer(settings: Settings) -> ExplainerChoice:
     client = json_client(settings)
     if client is None:
         return ExplainerChoice("rules", None, None)
-    return ExplainerChoice("model, checked", settings.llm_model, LlmExplainer(client))
+    return ExplainerChoice("model, checked", settings.llm_model_name(), LlmExplainer(client))

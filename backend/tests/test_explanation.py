@@ -7,7 +7,7 @@ from recon.explanation.case import ExplainInput, RecordView
 from recon.explanation.llm import LlmExplainer
 from recon.explanation.schema import ANSWER_SCHEMA, SYSTEM_PROMPT, LlmExplanation, user_message
 from recon.explanation.verify import render, verify
-from recon.mapping.llm_client import Completion, LlmRefusal
+from recon.llm.client import Completion, LlmRefusal
 
 
 def partial_case() -> ExplainInput:

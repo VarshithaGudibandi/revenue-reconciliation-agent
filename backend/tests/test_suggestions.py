@@ -20,20 +20,14 @@ from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.model import AnomalyKind, Dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
+from recon.llm.client import Completion, RecordingJson
 from recon.main import create_app
-from recon.mapping.llm_client import Completion, RecordingJson
 from recon.persistence.models import CaseSuggestion
 from recon.persistence.repository import create_profile, register_file
 from recon.pipeline import reconcile_period
 from recon.profiles import ProfileConfig
 
 PERIOD = "2026-01"
-
-
-@pytest.fixture(autouse=True)
-def no_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
 
 
 @dataclass
@@ -239,7 +233,7 @@ def test_the_model_resolves_a_paraphrased_memo_once_and_the_answer_is_kept(
     assert before["source"] == "rules"
     assert before["invoice_id"] is None
     assert first["source"] == "rules and model"
-    assert first["model"] == "claude-opus-5-5"
+    assert first["model"] == "gemini-3.1-flash-lite"
     assert first["invoice_id"] == intended
     # the rules could not settle it, so what the model found is a suggestion and says so
     assert not first["confident"]
@@ -310,7 +304,7 @@ def test_the_interface_can_ask_who_makes_the_suggestions(world: World, tmp_path:
         "adjudicator": {"name": "rules", "model": None},
         "explainer": {"name": "rules", "model": None},
     }
-    assert both["adjudicator"] == {"name": "rules and model", "model": "claude-opus-5-5"}
+    assert both["adjudicator"] == {"name": "rules and model", "model": "gemini-3.1-flash-lite"}
     assert both["mapper"]["name"] == "rules and model"
 
 

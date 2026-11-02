@@ -13,9 +13,7 @@ from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
 from recon.evaluation.mapping_score import classify, score_file
 from recon.ingestion.normalize import ColumnMapping
-from recon.mapping.llm import LlmMapper
-from recon.mapping.llm_client import (
-    AnthropicJson,
+from recon.llm.client import (
     CassetteMiss,
     Completion,
     LlmError,
@@ -24,6 +22,8 @@ from recon.mapping.llm_client import (
     ReplayJson,
     request_key,
 )
+from recon.llm.providers import AnthropicJson
+from recon.mapping.llm import LlmMapper
 from recon.mapping.llm_schema import (
     NO_COLUMN,
     SYSTEM_PROMPT,
@@ -368,7 +368,7 @@ def test_answers_are_recorded_once_and_replayed_without_the_model(tmp_path: Path
     assert len(replay) == 2
     assert replay.complete("sys", "user", {"s": 1}).text == first.text
     assert replay.complete("sys", "different", {"s": 1}).text == other.text
-    with pytest.raises(CassetteMiss, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(CassetteMiss, match="API key"):
         replay.complete("sys", "never asked", {"s": 1})
 
 

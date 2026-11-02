@@ -1,9 +1,10 @@
-"""Talking to a language model, behind an interface that can be recorded and replayed.
+"""The interface every language model client meets, and recorded answers.
 
-``AnthropicJson`` calls the API. ``RecordingJson`` wraps another client and saves every
-answer to a file; ``ReplayJson`` serves those saved answers and nothing else. That makes an
-evaluation repeatable for someone with no API key: they can replay what was recorded, but
-cannot ask a new question.
+A client takes a system prompt, a user message and a JSON schema, and returns JSON text that
+matches the schema. The providers live in ``recon.llm.providers``. ``RecordingJson`` wraps a
+client and saves every answer to a file; ``ReplayJson`` serves those saved answers and nothing
+else. That makes an evaluation repeatable for someone with no API key: they can replay what was
+recorded, but cannot ask a new question.
 """
 
 import hashlib
@@ -12,8 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-import anthropic
-
 
 class LlmError(RuntimeError):
     """The model could not give a usable answer."""
@@ -21,6 +20,11 @@ class LlmError(RuntimeError):
 
 class LlmRefusal(LlmError):
     """The model or its safety classifiers declined the request."""
+
+
+class QuotaExhausted(LlmError):
+    """The provider's quota is used up for longer than is worth waiting, such as a free tier's
+    requests for the day."""
 
 
 class CassetteMiss(LlmError):
@@ -48,67 +52,6 @@ def request_key(system: str, user: str, schema: dict[str, Any]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-class AnthropicJson:
-    """Asks Claude for JSON that matches a schema.
-
-    Thinking cannot be switched off on the default model, so the cost of a call is set with
-    ``effort``. Forced tool use is not available on it either, which is why the answer shape
-    is a structured output rather than a tool call.
-    """
-
-    def __init__(
-        self,
-        *,
-        model: str = "claude-opus-5-5",
-        effort: str = "low",
-        fallbacks: bool = True,
-        max_tokens: int = 16000,
-        client: Any = None,
-    ) -> None:
-        if client is None:
-            client = anthropic.Anthropic()
-        self._client = client
-        self.model = model
-        self._effort = effort
-        self._fallbacks = fallbacks
-        self._max_tokens = max_tokens
-
-    def complete(self, system: str, user: str, schema: dict[str, Any]) -> Completion:
-        arguments: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": self._max_tokens,
-            "system": system,
-            "messages": [{"role": "user", "content": user}],
-            "output_config": {
-                "effort": self._effort,
-                "format": {"type": "json_schema", "schema": schema},
-            },
-        }
-        try:
-            if self._fallbacks:
-                response = self._client.beta.messages.create(
-                    betas=["server-side-fallback-2026-07-01"], fallbacks="default", **arguments
-                )
-            else:
-                response = self._client.messages.create(**arguments)
-        except anthropic.APIError as error:
-            raise LlmError(f"the API request failed: {error}") from error
-
-        if response.stop_reason == "refusal":
-            raise LlmRefusal("the model declined the request")
-        if response.stop_reason == "max_tokens":
-            raise LlmError("the answer was cut off at the token limit")
-        text = next((b.text for b in response.content if b.type == "text"), None)
-        if text is None:
-            raise LlmError("the model returned no text")
-        return Completion(
-            text=text,
-            model=getattr(response, "model", self.model),
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-        )
-
-
 def _read(path: Path) -> dict[str, Completion]:
     answers: dict[str, Completion] = {}
     if path.exists():
@@ -134,7 +77,7 @@ class ReplayJson:
         found = self._answers.get(request_key(system, user, schema))
         if found is None:
             raise CassetteMiss(
-                "this request was not recorded; set ANTHROPIC_API_KEY to run it live "
+                "this request was not recorded; give the app an API key to run it live "
                 "and record the answer"
             )
         return found

@@ -17,20 +17,14 @@ from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.writer import write_dataset
 from recon.explanation.llm import LlmExplainer
 from recon.explanation.service import ExplainerChoice
+from recon.llm.client import Completion
 from recon.main import create_app
-from recon.mapping.llm_client import Completion
 from recon.persistence.models import CaseExplanation
 from recon.persistence.repository import create_profile, register_file
 from recon.pipeline import reconcile_period
 from recon.profiles import ProfileConfig
 
 PERIOD = "2026-01"
-
-
-@pytest.fixture(autouse=True)
-def no_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
 
 
 @dataclass

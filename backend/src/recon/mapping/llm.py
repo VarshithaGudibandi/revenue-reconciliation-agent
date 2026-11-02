@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
-from recon.mapping.llm_client import JsonModel, LlmError
+from recon.llm.client import JsonModel, LlmError
 from recon.mapping.llm_schema import (
     NO_COLUMN,
     SYSTEM_PROMPT,

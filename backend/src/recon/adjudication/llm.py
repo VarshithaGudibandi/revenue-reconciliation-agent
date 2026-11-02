@@ -17,7 +17,7 @@ from recon.adjudication.schema import (
     answer_schema,
     user_message,
 )
-from recon.mapping.llm_client import JsonModel, LlmError
+from recon.llm.client import JsonModel, LlmError
 
 
 def _squash(text: str) -> str:

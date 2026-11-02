@@ -15,20 +15,14 @@ from recon.config import Settings
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
+from recon.llm.client import Completion, RecordingJson
 from recon.main import create_app
 from recon.mapping.llm import LlmMapper
-from recon.mapping.llm_client import Completion, RecordingJson
 from recon.mapping.profile import profile_csv_bytes
 from recon.mapping.service import build_mapper
 from tests.test_mapping_llm import answer_for
 
 PERIOD = "2026-01"
-
-
-@pytest.fixture(autouse=True)
-def no_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
 
 
 @dataclasses.dataclass
@@ -360,12 +354,36 @@ def test_without_credentials_the_rules_are_used_and_a_required_model_is_refused(
 def test_with_credentials_the_model_is_added_to_the_rules(
     monkeypatch: pytest.MonkeyPatch, migrated_database_url: str, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "not-a-real-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "not-a-real-key")
 
     choice = build_mapper(Settings(database_url=migrated_database_url, storage_dir=tmp_path))
 
     assert choice.name == "rules and model"
-    assert choice.model == "claude-opus-5-5"
+    assert choice.model == "gemini-3.1-flash-lite"
+
+
+def test_another_provider_and_model_can_be_chosen(
+    monkeypatch: pytest.MonkeyPatch, migrated_database_url: str, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "not-a-real-key")
+    settings = Settings(
+        database_url=migrated_database_url,
+        storage_dir=tmp_path,
+        llm_provider="anthropic",
+        llm_model="claude-sonnet-5-5",
+    )
+
+    assert build_mapper(settings).model == "claude-sonnet-5-5"
+
+
+def test_a_key_for_another_provider_does_not_count(
+    monkeypatch: pytest.MonkeyPatch, migrated_database_url: str, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "not-a-real-key")
+
+    choice = build_mapper(Settings(database_url=migrated_database_url, storage_dir=tmp_path))
+
+    assert choice.name == "rules"
 
 
 class ScriptedModel:
@@ -408,7 +426,7 @@ def test_recorded_model_answers_are_replayed_without_a_key(
         proposal = propose(client, files)
 
     assert proposal["mapper"] == "rules and model"
-    assert proposal["model"] == "claude-opus-5-5"
+    assert proposal["model"] == "gemini-3.1-flash-lite"
     assert field(proposal, "invoices", "amount")["column"] == "Importo totale"
     assert field(proposal, "invoices", "amount")["confident"]
     assert proposal["invoices"]["needs_answer"] == 0

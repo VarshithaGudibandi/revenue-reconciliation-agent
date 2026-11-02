@@ -18,9 +18,17 @@ from recon.datagen.generate import Config, apply_corrections, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.model import Dataset
 from recon.datagen.writer import write_dataset
+from recon.llm.providers import KEY_VARIABLES
 from recon.persistence.repository import create_profile, register_file
 from recon.persistence.runs import get_or_create_run
 from recon.profiles import ProfileConfig
+
+
+@pytest.fixture(autouse=True)
+def no_model_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test reaches a real model: keys in the environment are hidden from every test."""
+    for name in ("RECON_LLM_API_KEY", *(n for names in KEY_VARIABLES.values() for n in names)):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture(scope="session")
