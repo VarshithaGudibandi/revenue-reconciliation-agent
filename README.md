@@ -218,11 +218,20 @@ The held-out figure for a file alone fell from 75% to 62% when the styles gained
 
 The answer is a structured output in which every column field can only be one of the file's own headers or `(none)`. The engine then downgrades any answer the data contradicts: a column whose values do not fit the field, a column used for two fields, a decimal separator the amounts do not read with, and a date order that the values leave open. A date order is never confident unless the values settle it, whatever the model says. `--mapper llm-unchecked` shows what the model says without these checks, so the effect of the checks can be measured.
 
-`python -m recon.evaluation.mapping_eval --mapper llm` runs the same evaluation as the baseline, with the model mapping each file on its own. It needs `ANTHROPIC_API_KEY`. `--record FILE` saves each answer to a file, and `--replay FILE` serves those answers without the network or a key, so the evaluation can be repeated by someone who cannot call the API; it cannot answer a question that was not recorded. The default model is `claude-opus-5-5` at low effort, with server-side refusal fallbacks switched on. Forced tool use is not available on that model, which is why the answer is a structured output. The command prints the number of calls, the tokens, and an estimated cost at list price.
+`python -m recon.evaluation.mapping_eval --mapper llm` runs the same evaluation as the baseline, with the model mapping each file on its own. It needs a key for the chosen provider (`--provider`, `--model`). `--record FILE` saves each answer to a file, and `--replay FILE` serves those answers without the network or a key, so the evaluation can be repeated by someone who cannot call the API; it cannot answer a question that was not recorded. A run stops, rather than scoring the rest as unanswered, when the provider's quota for the day is used up; the answers recorded so far are kept and the next run carries on from them. The command prints the number of calls and the tokens.
 
 `--mapper hybrid` combines the rules (mapped with both files in sight) with the model: where they agree the answer is confident, a confident rule is not overruled by the model, a model that is sure where the rules are not is followed as a suggestion that is still a question, and two confident answers that disagree are a conflict left to the user.
 
-No answers are recorded in this repository yet, so there are no measured results for the model. The unit tests use a fake model, a stand-in for the API client and a recorded file written by the tests.
+Files mapped exactly, 1 seed of 120 invoices, full month and first-12-days variants, with `gemini-3.1-flash-lite` on Google's free tier (recorded in `backend/cassettes/`, so `--replay` reproduces every model row without a key):
+
+| | development | held out | stress |
+|---|---|---|---|
+| rules, each file alone | 72% | 62% | 28% |
+| model, each file alone | 78% | 35% | 36% |
+| rules, both files together | 89% | 77% | 47% |
+| rules and model together (`hybrid`) | 92% | 83% | 70% |
+
+No file was confidently wrong in any row; everything not exact is a question for the user. The model alone is worse than the rules on the held-out styles: it leaves the payment reference of `stripe_like` and the free-text column of `xero_like` open, where the rules are unsure of the customer column of `xero_like` instead. Because they are unsure about different things, together they settle more than either, and the gain is largest on the stress styles, whose headers are in languages the rules' word lists do not cover or are just `Column A`. One seed is 360 files; the per-group figures for held out (48 files) are the least certain. The 29 calls that one seed needs used about 0.8 million input tokens.
 
 ## Adjudicating ambiguous payments
 
@@ -241,7 +250,18 @@ The engine never decides which of several look-alike invoices a payment belongs 
 | paraphrased | 26 | 0 | 26 |
 | useless | 25 | 0 | 25 |
 
-The rules are never confidently wrong. No adjudicator can do better than abstain on a useless memo, so 74% of these cases is the most that can be answered; the rules answer 47%, and the 27% that are paraphrased, with synonyms, other languages or typos, are what a model could add. There are no recorded model answers in this repository yet, so there is no measured result for the model; the unit tests use a fake one.
+The rules are never confidently wrong. No adjudicator can do better than abstain on a useless memo, so 74% of these cases is the most that can be answered; the rules answer 47%, and the 27% that are paraphrased, with synonyms, other languages or typos, are what a model could add.
+
+With the model (`--adjudicator llm`, `gemini-3.1-flash-lite`, the default 5 seeds of 200 invoices, recorded in `backend/cassettes/`):
+
+| memo | cases | rules: correct | model: correct | model: suggested, right | model: wrong |
+|---|---|---|---|---|---|
+| explicit | 13 | 13 | 13 | 0 | 0 |
+| descriptive | 14 | 14 | 14 | 0 | 0 |
+| paraphrased | 17 | 0 | 15 | 2 | 0 |
+| useless | 16 | 0 | 0 | 0 | 0 |
+
+The model settles 42 of the 44 cases that can be answered and suggests the right invoice for the other two, without settling them because it was not sure. It abstained on all 16 useless memos and was never wrong. The rules settle 27 of the same 60.
 
 In the application, the free text of a record is an optional column in the mapping (shown as Description for invoices and Payment memo for payments), stored with each record and shown under it in the case view. Every ambiguous-payment case carries a suggestion: the rules' reading of the memo, computed when the case is opened. When a language model is configured, "Ask the model" (`POST /api/cases/{id}/suggestion`) asks it once for what the case holds now and keeps the answer for that exact input, so asking again costs nothing and a changed file is a new question. The case view says who read the memo, quotes the words the suggestion rests on, and marks a suggestion the rules could not settle as "A suggestion, not settled". `GET /api/capabilities` says whether a model is configured. Nothing about a case changes because of a suggestion; the next step stays correcting the reference at the source.
 
@@ -253,7 +273,7 @@ The model is told the kind of exception, the difference the engine calculated, a
 
 A verified explanation is kept for the exact input it read (`case_explanation`), so asking again costs nothing and a changed file is a new question. A rejected attempt is kept as a record but not reused, so asking again asks again. What the check cannot do: it confirms that the figures and records are the engine's, not that the sentence built from them is wise. A sentence can use only true numbers and still point the reader at the wrong thing, so the text is labelled with who wrote it and what was checked, and says nothing was changed.
 
-There are no recorded model answers in this repository yet, so there is no measured rejection rate; the tests use a scripted model that explains faithfully, and one that invents a figure.
+`python -m recon.evaluation.explanation_eval` asks the model to explain up to three cases of each kind the engine finds in generated months and counts how many explanations the checks accept. With `gemini-3.1-flash-lite` (2 seeds, recorded in `backend/cassettes/`), all 46 were accepted: none cited a record outside the case, stated a figure the engine had not computed, or wrote a real id. I read a sample, and they are correct and plain. That says less than it seems: these cases have two or three records and generated memos, so there was little to get wrong. The tests also use a scripted model that invents a figure, to show the check rejects it.
 
 ## Synthetic data
 
@@ -282,7 +302,7 @@ The worker deletes what is finished with every six hours (`recon/retention.py`):
 
 ## Future work
 
-- Run the language-model stages against the live API and record the answers, so that the mapping, adjudication and explanation tables have measured model results; today they have only the rules' results.
+- More of the live evaluation: three seeds of mapping instead of one (a free-tier day allows roughly one), a paid model to compare with Flash-Lite, and explanation cases with long, messy memos, where the checks have more to catch.
 - A setup path for the model stages on deposits and payouts, and a reader for a bank memo that lists several payout ids.
 - Per-field editing of an alert channel, and encryption of webhook URLs at rest.
 - Real exports, in place of generated ones, to see whether the baseline and the grouping window hold.

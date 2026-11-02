@@ -41,6 +41,7 @@ The map above shows the parts and what flows between them. Teal is code that is 
 | `backend/src/recon/engine` | the matching engines (`reconcile.py`, `deposits.py`) and their result types |
 | `backend/src/recon/persistence` | models, repositories, runs, cases, setup |
 | `backend/src/recon/api` | the HTTP API and the queries behind it |
+| `backend/src/recon/llm` | one interface to a language model, clients for Gemini, Anthropic and OpenAI-compatible servers, and recorded answers |
 | `backend/src/recon/mapping`, `adjudication`, `explanation` | the stages that use a model, each with a rules-only path |
 | `backend/src/recon/jobs`, `worker.py`, `ingest`, `alerts`, `retention.py` | the queue, the worker, bucket ingestion, alerts, cleanup |
 | `backend/src/recon/datagen`, `evaluation` | synthetic data with known truth, and the evaluations that score against it |
