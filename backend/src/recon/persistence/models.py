@@ -503,6 +503,47 @@ class CaseExplanation(Base):
     created_at: Mapped[datetime] = created_at()
 
 
+class CaseInvestigation(Base):
+    """A model's investigation of a case: what it looked at, what it found, what a person decided.
+
+    The run itself is a LangGraph thread whose state is kept in the ``langgraph`` schema; this
+    row is what the application reads. A finding that failed its checks is kept as
+    ``not_shown``; one that passed waits for a decision, and is ``applied`` or ``rejected``.
+    """
+
+    __tablename__ = "case_investigation"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('awaiting_decision', 'not_shown', 'applied', 'rejected', 'failed')",
+            name="status_known",
+        ),
+        CheckConstraint(
+            "(status IN ('applied', 'rejected')) = (decided_at IS NOT NULL)",
+            name="decided_iff_decided_at",
+        ),
+        Index("ix_case_investigation_case", "case_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("exception_case.id", ondelete="CASCADE"), nullable=False
+    )
+    thread_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_version: Mapped[str] = mapped_column(Text, nullable=False)
+    finding: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    problems: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    trace: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    # alias -> [role, real id], to show the finding with the real ids.
+    aliases: Mapped[dict[str, list[str]]] = mapped_column(JSONB, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    decision_note: Mapped[str | None] = mapped_column(Text)
+    outcome: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = created_at()
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Job(Base):
     """A unit of work for a worker: what to do, who holds it and until when, how it ended.
 

@@ -302,6 +302,7 @@ def test_the_interface_can_ask_who_makes_the_suggestions(world: World, tmp_path:
         "mapper": {"name": "rules", "model": None},
         "adjudicator": {"name": "rules", "model": None},
         "explainer": {"name": "rules", "model": None},
+        "investigator": {"name": "none", "model": None},
     }
     assert both["adjudicator"] == {"name": "rules and model", "model": "gemini-3.1-flash-lite"}
     assert both["mapper"]["name"] == "rules and model"

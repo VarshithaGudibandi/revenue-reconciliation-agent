@@ -7,6 +7,7 @@ import { StatusBadge } from "./Badges";
 import { AcceptDialog } from "./Dialogs";
 import { CloseIcon } from "./Icons";
 import { ExplanationSection } from "./ExplanationSection";
+import { InvestigationSection } from "./InvestigationSection";
 import { SuggestionSection } from "./SuggestionSection";
 
 function Notice({ tone, children }: { tone?: "warning" | "critical" | "good"; children: React.ReactNode }) {
@@ -151,6 +152,16 @@ export function CaseDrawer({
               caseId={caseId}
               explanation={data.explanation ?? null}
               canAskModel={capabilities.data?.explainer.model != null}
+            />
+
+            <InvestigationSection
+              caseId={caseId}
+              kind={data.kind}
+              caseVersion={data.version}
+              canInvestigate={
+                capabilities.data?.investigator.model != null &&
+                (data.status === "open" || data.status === "fix_reported")
+              }
             />
 
             {data.suggestion ? (

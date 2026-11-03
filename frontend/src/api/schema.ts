@@ -164,6 +164,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cases/{case_id}/investigation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Investigation */
+        get: operations["latest_investigation_api_cases__case_id__investigation_get"];
+        put?: never;
+        /**
+         * Investigate Case
+         * @description Ask a language model to investigate why the case arose.
+         *
+         *     It reads the month the case is in with read-only tools and proposes a cause, the records it
+         *     rests on and an action. Nothing about the case changes: a finding that passes its checks
+         *     waits for a person's decision, and one that fails them is not shown.
+         */
+        post: operations["investigate_case_api_cases__case_id__investigation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cases/{case_id}/notes": {
         parameters: {
             query?: never;
@@ -286,6 +311,29 @@ export interface paths {
         put?: never;
         /** Load Corrected */
         post: operations["load_corrected_api_demo_load_corrected_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/investigations/{investigation_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Investigation
+         * @description Approve or reject what an investigation found. Approving adds the finding to the case's
+         *     notes, and for a cost the business bears (a fee, a discount, a bank charge) accepts the
+         *     variance; the case still closes only when the data says so. Deciding again the same way
+         *     changes nothing.
+         */
+        post: operations["decide_investigation_api_investigations__investigation_id__decision_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -618,6 +666,7 @@ export interface components {
         CapabilitiesOut: {
             adjudicator: components["schemas"]["ToolOut"];
             explainer: components["schemas"]["ToolOut"];
+            investigator: components["schemas"]["ToolOut"];
             mapper: components["schemas"]["ToolOut"];
         };
         /** CaseDetailOut */
@@ -981,6 +1030,88 @@ export interface components {
              * @enum {string}
              */
             source: "invoices" | "payments";
+        };
+        /** FindingOut */
+        FindingOut: {
+            /** Action */
+            action: string;
+            /** Cause */
+            cause: string;
+            /** Confidence */
+            confidence: string;
+            /** Evidence */
+            evidence: string[];
+            /** Note */
+            note: string;
+        };
+        /**
+         * InvestigationDecisionIn
+         * @description Approve or reject a finding. Approving records it on the case, and for a cost the
+         *     business bears accepts the variance; ``expected_version`` is the case version last seen.
+         */
+        InvestigationDecisionIn: {
+            /** Approve */
+            approve: boolean;
+            /** Expected Version */
+            expected_version?: number | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * InvestigationOut
+         * @description A model's investigation of a case. ``awaiting_decision`` means its finding passed the
+         *     checks and waits for a person; ``not_shown`` that it failed them (``problems`` says how);
+         *     ``applied`` or ``rejected`` what a person decided.
+         */
+        InvestigationOut: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decision Note */
+            decision_note: string | null;
+            /** Error */
+            error: string | null;
+            finding: components["schemas"]["FindingOut"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Model */
+            model: string;
+            /** Outcome */
+            outcome: string | null;
+            /** Problems */
+            problems: string[];
+            /** Status */
+            status: string;
+            /** Trace */
+            trace: components["schemas"]["InvestigationStepOut"][];
+        };
+        /**
+         * InvestigationStepOut
+         * @description One tool the model called while investigating, and what it was shown.
+         */
+        InvestigationStepOut: {
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Tool */
+            tool: string;
         };
         /**
          * JobOut
@@ -1950,6 +2081,122 @@ export interface operations {
             };
         };
     };
+    latest_investigation_api_cases__case_id__investigation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestigationOut"] | null;
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    investigate_case_api_cases__case_id__investigation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestigationOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     post_note_api_cases__case_id__notes_post: {
         parameters: {
             query?: never;
@@ -2336,6 +2583,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description The profile, period or case does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is too large. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is not valid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    decide_investigation_api_investigations__investigation_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                investigation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvestigationDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvestigationOut"];
                 };
             };
             /** @description The profile, period or case does not exist. */

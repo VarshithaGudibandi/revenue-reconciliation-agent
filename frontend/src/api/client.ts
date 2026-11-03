@@ -22,6 +22,8 @@ export type FilePreview = Schemas["FilePreview"];
 export type Suggestion = Schemas["SuggestionOut"];
 export type Explanation = Schemas["ExplanationOut"];
 export type AskedExplanation = Schemas["AskExplanationOut"];
+export type Investigation = Schemas["InvestigationOut"];
+export type InvestigationDecision = Schemas["InvestigationDecisionIn"];
 export type Capabilities = Schemas["CapabilitiesOut"];
 export type Confirmation = Schemas["ConfirmOut"];
 
@@ -185,6 +187,11 @@ export const api = {
   deliveries: () => request<Delivery[]>("/api/alert-deliveries"),
   askForExplanation: (caseId: string) =>
     request<AskedExplanation>(`/api/cases/${caseId}/explanation`, { method: "POST" }),
+  investigation: (caseId: string) => request<Investigation | null>(`/api/cases/${caseId}/investigation`),
+  startInvestigation: (caseId: string) =>
+    request<Investigation>(`/api/cases/${caseId}/investigation`, { method: "POST" }),
+  decideInvestigation: (investigationId: string, body: InvestigationDecision) =>
+    post<Investigation>(`/api/investigations/${investigationId}/decision`, body),
   askForSuggestion: (caseId: string) =>
     request<Suggestion>(`/api/cases/${caseId}/suggestion`, { method: "POST" }),
   demo: () => request<Schemas["DemoOut"]>("/api/demo"),

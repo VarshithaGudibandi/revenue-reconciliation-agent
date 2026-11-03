@@ -6,6 +6,7 @@ import {
   type CaseQuery,
   type ChannelBody,
   type ChannelPatch,
+  type InvestigationDecision,
   type MappingBody,
 } from "./client";
 
@@ -125,6 +126,29 @@ export function useAskForExplanation(caseId: string) {
     mutationFn: () => api.askForExplanation(caseId),
     onSuccess: (asked) => {
       if (asked.explanation) void client.invalidateQueries({ queryKey: ["case", caseId] });
+    },
+  });
+}
+
+export const useInvestigation = (caseId: string) =>
+  useQuery({ queryKey: ["investigation", caseId], queryFn: () => api.investigation(caseId) });
+
+export function useStartInvestigation(caseId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.startInvestigation(caseId),
+    onSuccess: (started) => client.setQueryData(["investigation", caseId], started),
+  });
+}
+
+export function useDecideInvestigation(caseId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: InvestigationDecision }) => api.decideInvestigation(id, body),
+    onSuccess: (decided) => {
+      client.setQueryData(["investigation", caseId], decided);
+      // An approved finding adds a note, and may accept the variance.
+      for (const key of ["case", "cases", "summary"]) void client.invalidateQueries({ queryKey: [key] });
     },
   });
 }

@@ -185,6 +185,7 @@ export const capabilities = (model: string | null = null) => ({
   mapper: { name: model ? "rules and model" : "rules", model },
   adjudicator: { name: model ? "rules and model" : "rules", model },
   explainer: { name: model ? "model, checked" : "rules", model },
+  investigator: { name: model ? "model, checked" : "none", model },
 });
 
 export function explanationFixture(overrides: Record<string, unknown> = {}) {

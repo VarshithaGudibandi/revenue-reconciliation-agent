@@ -15,10 +15,12 @@ from starlette.types import Scope
 
 from recon.ai.adjudication.service import build_adjudicator
 from recon.ai.explanation.llm import build_explainer
+from recon.ai.investigation.service import DecisionError, NotInvestigableError, build_investigator
 from recon.ai.mapping.service import build_mapper
 from recon.api.alerts import ChannelExistsError, UnknownChannelError
 from recon.api.alerts import router as alerts_router
 from recon.api.idempotency import IdempotencyKeyError
+from recon.api.investigations import router as investigations_router
 from recon.api.routes import demo_router, router
 from recon.api.setup_routes import router as setup_router
 from recon.api.suggestions import NotApplicableError
@@ -76,6 +78,14 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ProposalConflictError)
     def proposal_conflict(_: Request, error: ProposalConflictError) -> JSONResponse:
         return error_response(409, "proposal_confirmed", str(error))
+
+    @app.exception_handler(NotInvestigableError)
+    def not_investigable(_: Request, error: NotInvestigableError) -> JSONResponse:
+        return error_response(409, "not_applicable", str(error))
+
+    @app.exception_handler(DecisionError)
+    def no_decision(_: Request, error: DecisionError) -> JSONResponse:
+        return error_response(409, "not_awaiting_decision", str(error))
 
     @app.exception_handler(NotApplicableError)
     def not_applicable(_: Request, error: NotApplicableError) -> JSONResponse:
@@ -147,6 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.mapper = build_mapper(resolved)
     app.state.adjudicator = build_adjudicator(resolved)
     app.state.explainer = build_explainer(resolved)
+    app.state.investigator = build_investigator(resolved)
     register_error_handlers(app)
 
     @app.get("/health")
@@ -165,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(router)
     app.include_router(alerts_router)
+    app.include_router(investigations_router)
     app.include_router(setup_router)
     if resolved.demo:
         app.include_router(demo_router)

@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -212,6 +212,51 @@ class CapabilitiesOut(BaseModel):
     mapper: ToolOut
     adjudicator: ToolOut
     explainer: ToolOut
+    investigator: ToolOut
+
+
+class InvestigationStepOut(BaseModel):
+    """One tool the model called while investigating, and what it was shown."""
+
+    tool: str
+    arguments: dict[str, Any]
+    result: dict[str, Any]
+
+
+class FindingOut(BaseModel):
+    cause: str
+    confidence: str
+    evidence: list[str]
+    action: str
+    note: str
+
+
+class InvestigationOut(BaseModel):
+    """A model's investigation of a case. ``awaiting_decision`` means its finding passed the
+    checks and waits for a person; ``not_shown`` that it failed them (``problems`` says how);
+    ``applied`` or ``rejected`` what a person decided."""
+
+    id: uuid.UUID
+    case_id: uuid.UUID
+    status: str
+    model: str
+    finding: FindingOut | None
+    problems: list[str]
+    trace: list[InvestigationStepOut]
+    error: str | None
+    outcome: str | None
+    decision_note: str | None
+    created_at: datetime
+    decided_at: datetime | None
+
+
+class InvestigationDecisionIn(BaseModel):
+    """Approve or reject a finding. Approving records it on the case, and for a cost the
+    business bears accepts the variance; ``expected_version`` is the case version last seen."""
+
+    approve: bool
+    note: str | None = Field(default=None, max_length=2000)
+    expected_version: int | None = None
 
 
 class CaseDetailOut(BaseModel):

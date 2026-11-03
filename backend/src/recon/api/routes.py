@@ -175,6 +175,10 @@ def capabilities(
         mapper=ToolOut(name=mapper.name, model=mapper.model),
         adjudicator=ToolOut(name=adjudicator.name, model=adjudicator.model),
         explainer=ToolOut(name=explainer.name, model=explainer.model),
+        investigator=ToolOut(
+            name="model, checked" if request.app.state.investigator.available else "none",
+            model=request.app.state.investigator.name,
+        ),
     )
 
 

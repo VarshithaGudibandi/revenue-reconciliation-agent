@@ -190,6 +190,9 @@
           "explainer": {
             "$ref": "#/components/schemas/ToolOut"
           },
+          "investigator": {
+            "$ref": "#/components/schemas/ToolOut"
+          },
           "mapper": {
             "$ref": "#/components/schemas/ToolOut"
           }
@@ -197,7 +200,8 @@
         "required": [
           "mapper",
           "adjudicator",
-          "explainer"
+          "explainer",
+          "investigator"
         ],
         "title": "CapabilitiesOut",
         "type": "object"
@@ -1244,6 +1248,218 @@
           "needs_answer"
         ],
         "title": "FileProposalOut",
+        "type": "object"
+      },
+      "FindingOut": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "cause": {
+            "title": "Cause",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cause",
+          "confidence",
+          "evidence",
+          "action",
+          "note"
+        ],
+        "title": "FindingOut",
+        "type": "object"
+      },
+      "InvestigationDecisionIn": {
+        "description": "Approve or reject a finding. Approving records it on the case, and for a cost the\nbusiness bears accepts the variance; ``expected_version`` is the case version last seen.",
+        "properties": {
+          "approve": {
+            "title": "Approve",
+            "type": "boolean"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "approve"
+        ],
+        "title": "InvestigationDecisionIn",
+        "type": "object"
+      },
+      "InvestigationOut": {
+        "description": "A model's investigation of a case. ``awaiting_decision`` means its finding passed the\nchecks and waits for a person; ``not_shown`` that it failed them (``problems`` says how);\n``applied`` or ``rejected`` what a person decided.",
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FindingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trace": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigationStepOut"
+            },
+            "title": "Trace",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "status",
+          "model",
+          "finding",
+          "problems",
+          "trace",
+          "error",
+          "outcome",
+          "decision_note",
+          "created_at",
+          "decided_at"
+        ],
+        "title": "InvestigationOut",
+        "type": "object"
+      },
+      "InvestigationStepOut": {
+        "description": "One tool the model called while investigating, and what it was shown.",
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "arguments",
+          "result"
+        ],
+        "title": "InvestigationStepOut",
         "type": "object"
       },
       "JobOut": {
@@ -3034,6 +3250,153 @@
         "summary": "Ask For Explanation"
       }
     },
+    "/api/cases/{case_id}/investigation": {
+      "get": {
+        "operationId": "latest_investigation_api_cases__case_id__investigation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvestigationOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Latest Investigation Api Cases  Case Id  Investigation Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Latest Investigation"
+      },
+      "post": {
+        "description": "Ask a language model to investigate why the case arose.\n\nIt reads the month the case is in with read-only tools and proposes a cause, the records it\nrests on and an action. Nothing about the case changes: a finding that passes its checks\nwaits for a person's decision, and one that fails them is not shown.",
+        "operationId": "investigate_case_api_cases__case_id__investigation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Investigate Case"
+      }
+    },
     "/api/cases/{case_id}/notes": {
       "post": {
         "operationId": "post_note_api_cases__case_id__notes_post",
@@ -3604,6 +3967,87 @@
           }
         },
         "summary": "Load Corrected"
+      }
+    },
+    "/api/investigations/{investigation_id}/decision": {
+      "post": {
+        "description": "Approve or reject what an investigation found. Approving adds the finding to the case's\nnotes, and for a cost the business bears (a fee, a discount, a bank charge) accepts the\nvariance; the case still closes only when the data says so. Deciding again the same way\nchanges nothing.",
+        "operationId": "decide_investigation_api_investigations__investigation_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investigation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Investigation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvestigationDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The profile, period or case does not exist."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request conflicts with the current state."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The uploaded file is too large."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The request is not valid."
+          }
+        },
+        "summary": "Decide Investigation"
       }
     },
     "/api/jobs/{job_id}": {
