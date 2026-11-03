@@ -5,6 +5,7 @@ import random
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
+from recon.datagen.causes import add_causes
 from recon.datagen.model import (
     Anomaly,
     AnomalyKind,
@@ -47,6 +48,9 @@ class Config:
     currency_mismatch_rate: float = 0.01
     ambiguous_rate: float = 0.02
     unmatched_payment_rate: float = 0.03
+    # Give some problems a cause behind them (datagen.causes). Off by default, so that the data
+    # every recording and the demo were made from does not change.
+    causes: bool = False
 
     def anomaly_counts(self) -> dict[AnomalyKind, int]:
         """How many invoices get each anomaly, how many ambiguous groups, and how many orphans."""
@@ -245,7 +249,7 @@ def generate_dataset(config: Config) -> Dataset:
         flag(AnomalyKind.UNMATCHED_PAYMENT, (), (payment_id,), -amount, donor.currency)
 
     rng.shuffle(payments)
-    return add_text(
+    dataset = add_text(
         Dataset(
             revision=1,
             seed=config.seed,
@@ -255,6 +259,7 @@ def generate_dataset(config: Config) -> Dataset:
             truth=GroundTruth(matches=tuple(matches), anomalies=tuple(anomalies), resolved=()),
         )
     )
+    return add_causes(dataset, customers) if config.causes else dataset
 
 
 def _plan_invoices(

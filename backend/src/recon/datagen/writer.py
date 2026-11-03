@@ -31,6 +31,7 @@ def truth_to_dict(dataset: Dataset) -> dict[str, Any]:
                 "currency": a.currency,
                 "intended_invoice_id": a.intended_invoice_id,
                 "memo_kind": a.memo_kind,
+                **({"cause": a.cause, "related": list(a.related)} if a.cause else {}),
             }
             for a in truth.anomalies
         ],

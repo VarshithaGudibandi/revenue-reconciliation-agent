@@ -67,6 +67,10 @@ class Anomaly:
     currency: str
     intended_invoice_id: str | None = None
     memo_kind: str | None = None
+    # Why the problem arose, when the dataset was generated with causes (``datagen.causes``),
+    # and the other anomalies that the same cause produced.
+    cause: str | None = None
+    related: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
