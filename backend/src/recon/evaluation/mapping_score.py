@@ -12,8 +12,8 @@ The outcomes separate the failures that matter:
 from collections.abc import Mapping
 from typing import Literal
 
-from recon.ingestion.normalize import ColumnMapping
-from recon.mapping.proposal import FIELDS, OPTIONAL_FIELDS, FileProposal
+from recon.ai.mapping.proposal import FIELDS, OPTIONAL_FIELDS, FileProposal
+from recon.files.normalize import ColumnMapping
 
 Outcome = Literal["correct", "asked", "missed", "wrong"]
 FILE_OUTCOMES = ("exact", "needs_user", "missed", "wrong")

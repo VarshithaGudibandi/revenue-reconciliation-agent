@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from recon.jobs import queue
-from recon.jobs.worker import Permanent, Retry, Worker
+from recon.jobs.runner import Permanent, Retry, Worker
 from recon.persistence.models import Job
 
 T0 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)

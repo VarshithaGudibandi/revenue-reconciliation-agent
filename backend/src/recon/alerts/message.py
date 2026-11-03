@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from recon.domain.money import format_amount
+from recon.money import format_amount
 from recon.persistence.models import ExceptionCase, Profile
 
 OPEN = ("open", "fix_reported")

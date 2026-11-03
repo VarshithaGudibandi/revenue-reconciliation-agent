@@ -9,8 +9,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
-from recon.datagen.model import Anomaly, AnomalyKind
-from recon.persistence.case_actions import (
+from recon.cases.actions import (
     AcceptReason,
     CaseNotFoundError,
     InvalidTransitionError,
@@ -23,6 +22,7 @@ from recon.persistence.case_actions import (
     report_fix,
     retract_fix,
 )
+from recon.datagen.model import Anomaly, AnomalyKind
 from recon.persistence.models import ExceptionCase
 from recon.pipeline import reconcile_period
 from tests.conftest import PERIOD, Env

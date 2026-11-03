@@ -11,15 +11,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
+from recon.ai.llm.client import Completion, RecordingJson
+from recon.ai.mapping.llm import LlmMapper
+from recon.ai.mapping.profile import profile_csv_bytes
+from recon.ai.mapping.service import build_mapper
 from recon.config import Settings
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
-from recon.llm.client import Completion, RecordingJson
 from recon.main import create_app
-from recon.mapping.llm import LlmMapper
-from recon.mapping.profile import profile_csv_bytes
-from recon.mapping.service import build_mapper
 from tests.test_mapping_llm import answer_for
 
 PERIOD = "2026-01"
@@ -400,7 +400,7 @@ class ScriptedModel:
 
 
 def record_answers(files: Files, cassette: Path, change: dict[str, Any] | None = None) -> None:
-    from recon.ingestion.normalize import ColumnMapping
+    from recon.files.normalize import ColumnMapping
 
     mappings = {
         "invoices": INVOICE_STYLES[files.styles.invoices].mapping(),

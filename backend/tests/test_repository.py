@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from recon.datagen.generate import Config, apply_corrections, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.writer import write_dataset
-from recon.ingestion.normalize import MappingError, normalize_csv
+from recon.files.normalize import MappingError, normalize_csv
 from recon.persistence.models import SourceFileVersion, SourceRecord
 from recon.persistence.repository import (
     ProfileExistsError,

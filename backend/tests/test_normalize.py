@@ -7,8 +7,7 @@ from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.model import AnomalyKind
 from recon.datagen.writer import write_dataset
-from recon.domain.money import Money
-from recon.ingestion.normalize import (
+from recon.files.normalize import (
     ColumnMapping,
     MappingError,
     NormalizationError,
@@ -17,6 +16,7 @@ from recon.ingestion.normalize import (
     normalize_reference,
     parse_date,
 )
+from recon.money import Money
 
 
 @pytest.mark.parametrize(

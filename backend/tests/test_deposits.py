@@ -15,10 +15,10 @@ from recon.datagen.batches import (
     generate_batches,
     write_batches,
 )
-from recon.domain.money import Money
 from recon.engine.deposits import MAX_CANDIDATES, MAX_GROUP, find_groupings, reconcile_deposits
 from recon.engine.model import EngineConfig, ExceptionKind, ReconciliationResult
-from recon.ingestion.normalize import NormalizedRecord, normalize_csv, normalize_reference
+from recon.files.normalize import NormalizedRecord, normalize_csv, normalize_reference
+from recon.money import Money
 
 DAY = date(2026, 1, 20)
 

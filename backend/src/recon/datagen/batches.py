@@ -23,8 +23,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from recon.domain.money import format_amount
-from recon.ingestion.normalize import ColumnMapping
+from recon.files.normalize import ColumnMapping
+from recon.money import format_amount
 
 PROCESSORS = (("STRIPE", "USD"), ("PAYPAL", "USD"), ("ADYEN", "EUR"))
 

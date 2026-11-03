@@ -5,7 +5,7 @@ from collections.abc import Callable, Sequence
 from recon.engine.deposits import reconcile_deposits
 from recon.engine.model import EngineConfig, ReconciliationResult
 from recon.engine.reconcile import reconcile
-from recon.ingestion.normalize import NormalizedRecord
+from recon.files.normalize import NormalizedRecord
 
 Engine = Callable[
     [Sequence[NormalizedRecord], Sequence[NormalizedRecord], EngineConfig | None],

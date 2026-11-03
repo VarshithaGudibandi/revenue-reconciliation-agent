@@ -18,7 +18,8 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session, sessionmaker
 
-from recon.adjudication.service import AdjudicatorChoice
+from recon.ai.adjudication.service import AdjudicatorChoice
+from recon.ai.explanation.service import ExplainerChoice
 from recon.api import queries
 from recon.api.explanations import ask_explainer
 from recon.api.idempotency import request_hash, run_once, validate_key
@@ -43,10 +44,7 @@ from recon.api.schemas import (
     UploadOut,
 )
 from recon.api.suggestions import ask_adjudicator
-from recon.config import Settings
-from recon.demo import DEMO_PERIOD, demo_state, register_corrected_export
-from recon.explanation.service import ExplainerChoice
-from recon.persistence.case_actions import (
+from recon.cases.actions import (
     AcceptReason,
     accept_variance,
     add_note,
@@ -54,6 +52,8 @@ from recon.persistence.case_actions import (
     report_fix,
     retract_fix,
 )
+from recon.config import Settings
+from recon.demo import DEMO_PERIOD, demo_state, register_corrected_export
 from recon.persistence.repository import (
     check_period,
     get_profile,

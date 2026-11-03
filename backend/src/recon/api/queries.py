@@ -8,7 +8,6 @@ from typing import Any, Literal
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
-from recon.api.explain import RecordFacts, explain
 from recon.api.explanations import current_explanation
 from recon.api.records import RecordKey, source_records
 from recon.api.schemas import (
@@ -31,8 +30,9 @@ from recon.api.schemas import (
     amount_of,
 )
 from recon.api.suggestions import current_suggestion
-from recon.domain.money import Money
-from recon.persistence.case_actions import get_case_detail
+from recon.cases.actions import get_case_detail
+from recon.cases.explain import RecordFacts, explain
+from recon.money import Money
 from recon.persistence.models import (
     CaseRecord,
     CaseSync,

@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from recon.persistence.cases import SyncSummary, sync_cases
+from recon.cases.sync import SyncSummary, sync_cases
 from recon.persistence.runs import RunSummary, get_or_create_run, run_reconciliation
 
 

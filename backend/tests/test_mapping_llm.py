@@ -8,12 +8,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from recon.datagen.generate import Config, generate_dataset
-from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
-from recon.datagen.writer import write_dataset
-from recon.evaluation.mapping_score import classify, score_file
-from recon.ingestion.normalize import ColumnMapping
-from recon.llm.client import (
+from recon.ai.llm.client import (
     CassetteMiss,
     Completion,
     LlmError,
@@ -22,16 +17,21 @@ from recon.llm.client import (
     ReplayJson,
     request_key,
 )
-from recon.llm.providers import AnthropicJson
-from recon.mapping.llm import LlmMapper
-from recon.mapping.llm_schema import (
+from recon.ai.llm.providers import AnthropicJson
+from recon.ai.mapping.llm import LlmMapper
+from recon.ai.mapping.llm_schema import (
     NO_COLUMN,
     SYSTEM_PROMPT,
     LlmFileMapping,
     answer_schema,
     user_message,
 )
-from recon.mapping.profile import DATE_FORMATS, FileProfile, mask_value, profile_csv_bytes
+from recon.ai.mapping.profile import DATE_FORMATS, FileProfile, mask_value, profile_csv_bytes
+from recon.datagen.generate import Config, generate_dataset
+from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
+from recon.datagen.writer import write_dataset
+from recon.evaluation.mapping_score import classify, score_file
+from recon.files.normalize import ColumnMapping
 
 
 def profile_of(style: str, source: str, tmp_path: Path, seed: int = 0) -> FileProfile:

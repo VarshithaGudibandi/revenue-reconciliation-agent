@@ -7,14 +7,14 @@ them and the replay fails: record again, and update the README with what comes o
 
 from pathlib import Path
 
-from recon.adjudication.llm import LlmAdjudicator
+from recon.ai.adjudication.llm import LlmAdjudicator
+from recon.ai.explanation.llm import LlmExplainer
+from recon.ai.llm.client import ReplayJson
+from recon.ai.llm.tools import ReplaySteps
+from recon.ai.mapping.agent import AgentMapper
 from recon.evaluation.adjudication_eval import run_evaluation as adjudication_run
 from recon.evaluation.explanation_eval import explain_inputs
 from recon.evaluation.mapping_eval import all_cases, run_evaluation, sample_cases, summarize
-from recon.explanation.llm import LlmExplainer
-from recon.llm.client import ReplayJson
-from recon.llm.tools import ReplaySteps
-from recon.mapping.agent import AgentMapper
 
 CASSETTES = Path(__file__).resolve().parents[1] / "cassettes"
 MODEL = "gemini-3.1-flash-lite"

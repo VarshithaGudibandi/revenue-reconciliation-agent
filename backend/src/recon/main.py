@@ -13,24 +13,24 @@ from sqlalchemy.orm import sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Scope
 
-from recon.adjudication.service import build_adjudicator
+from recon.ai.adjudication.service import build_adjudicator
+from recon.ai.explanation.service import build_explainer
+from recon.ai.mapping.service import build_mapper
 from recon.api.alerts import ChannelExistsError, UnknownChannelError
 from recon.api.alerts import router as alerts_router
 from recon.api.idempotency import IdempotencyKeyError
 from recon.api.routes import demo_router, router
 from recon.api.setup_routes import router as setup_router
 from recon.api.suggestions import NotApplicableError
-from recon.config import Settings
-from recon.db import create_db_engine
-from recon.explanation.service import build_explainer
-from recon.ingestion.normalize import MappingError
-from recon.jobs.queue import UnknownJobError
-from recon.mapping.service import build_mapper
-from recon.persistence.case_actions import (
+from recon.cases.actions import (
     CaseNotFoundError,
     InvalidTransitionError,
     StaleCaseError,
 )
+from recon.config import Settings
+from recon.db import create_db_engine
+from recon.files.normalize import MappingError
+from recon.jobs.queue import UnknownJobError
 from recon.persistence.repository import (
     ProfileExistsError,
     UnknownProfileError,

@@ -2,7 +2,7 @@ import hashlib
 import json
 from collections.abc import Iterable
 
-from recon.domain.money import Money
+from recon.money import Money
 
 
 def exception_signature(

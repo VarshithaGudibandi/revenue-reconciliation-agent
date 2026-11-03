@@ -12,10 +12,10 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from recon.adjudication.case import AdjudicationCase, Candidate, Ruling
-from recon.adjudication.combine import combine_rulings
-from recon.adjudication.llm import LlmAdjudicator
-from recon.adjudication.rules import adjudicate_by_rules
+from recon.ai.adjudication.case import AdjudicationCase, Candidate, Ruling
+from recon.ai.adjudication.combine import combine_rulings
+from recon.ai.adjudication.llm import LlmAdjudicator
+from recon.ai.adjudication.rules import adjudicate_by_rules
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.model import AnomalyKind, Dataset
 from recon.datagen.text import MEMO_KINDS

@@ -25,7 +25,6 @@ reported as ambiguous rather than as nothing found.
 from collections import defaultdict
 from collections.abc import Sequence
 
-from recon.domain.money import Money
 from recon.engine.model import (
     EngineConfig,
     ExceptionKind,
@@ -34,7 +33,8 @@ from recon.engine.model import (
     ReconciliationResult,
 )
 from recon.engine.reconcile import component_of, reference_pass
-from recon.ingestion.normalize import NormalizedRecord
+from recon.files.normalize import NormalizedRecord
+from recon.money import Money
 
 # How long before a deposit its payouts may have been paid out, for groups found by amount alone.
 # Payouts reach the bank within days. A wider window lets unrelated payouts add up to the same

@@ -3,16 +3,16 @@ from pathlib import Path
 
 import pytest
 
+from recon.ai.mapping.baseline import propose_file, propose_mapping
+from recon.ai.mapping.pairing import each_file_alone
+from recon.ai.mapping.profile import FileProfile, profile_csv_bytes
+from recon.ai.mapping.proposal import FileProposal, MappingProposal, field_choice, value_choice
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, STRESS_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
 from recon.evaluation.mapping_eval import run_case, run_evaluation, summarize
 from recon.evaluation.mapping_score import classify, judge
-from recon.ingestion.normalize import normalize_csv
-from recon.mapping.baseline import propose_file, propose_mapping
-from recon.mapping.pairing import each_file_alone
-from recon.mapping.profile import FileProfile, profile_csv_bytes
-from recon.mapping.proposal import FileProposal, MappingProposal, field_choice, value_choice
+from recon.files.normalize import normalize_csv
 
 
 def proposal_for(styles: ExportStyles, tmp_path: Path, seed: int = 0) -> MappingProposal:

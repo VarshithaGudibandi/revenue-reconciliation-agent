@@ -12,12 +12,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from recon.ai.explanation.llm import LlmExplainer
+from recon.ai.explanation.service import ExplainerChoice
+from recon.ai.llm.client import Completion
 from recon.config import Settings
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.writer import write_dataset
-from recon.explanation.llm import LlmExplainer
-from recon.explanation.service import ExplainerChoice
-from recon.llm.client import Completion
 from recon.main import create_app
 from recon.persistence.models import CaseExplanation
 from recon.persistence.repository import create_profile, register_file

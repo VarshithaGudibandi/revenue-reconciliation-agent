@@ -6,14 +6,14 @@ from typing import Any
 
 import pytest
 
+from recon.ai.llm.client import LlmError
+from recon.ai.llm.tools import Message, Step, Tool, ToolCall, ToolResults
+from recon.ai.mapping.agent import AgentMapper, Measurements, user_message
+from recon.ai.mapping.profile import FileProfile, profile_csv_bytes
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.styles import ExportStyles
 from recon.datagen.writer import write_dataset
-from recon.ingestion.normalize import ColumnMapping
-from recon.llm.client import LlmError
-from recon.llm.tools import Message, Step, Tool, ToolCall, ToolResults
-from recon.mapping.agent import AgentMapper, Measurements, user_message
-from recon.mapping.profile import FileProfile, profile_csv_bytes
+from recon.files.normalize import ColumnMapping
 from tests.test_mapping_llm import answer_for
 
 

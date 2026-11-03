@@ -16,8 +16,8 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from recon.datagen.model import Dataset, Invoice, Payment
-from recon.domain.money import format_amount
-from recon.ingestion.normalize import ColumnMapping
+from recon.files.normalize import ColumnMapping
+from recon.money import format_amount
 
 INVOICE_FIELDS = ("record_id", "counterparty", "date", "currency", "amount")
 PAYMENT_FIELDS = (*INVOICE_FIELDS, "reference")

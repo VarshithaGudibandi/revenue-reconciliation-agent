@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from recon.domain.money import format_amount
+from recon.money import format_amount
 
 
 class Amount(BaseModel):

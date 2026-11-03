@@ -5,7 +5,6 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from recon.domain.money import Money
 from recon.engine.model import (
     EngineConfig,
     ExceptionKind,
@@ -13,7 +12,8 @@ from recon.engine.model import (
     ReconciliationResult,
 )
 from recon.engine.reconcile import reconcile
-from recon.ingestion.normalize import NormalizedRecord, normalize_reference
+from recon.files.normalize import NormalizedRecord, normalize_reference
+from recon.money import Money
 
 
 def invoice(

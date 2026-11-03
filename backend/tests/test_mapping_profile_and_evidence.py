@@ -2,8 +2,7 @@ import json
 
 import pytest
 
-from recon.ingestion.normalize import MappingError
-from recon.mapping.evidence import (
+from recon.ai.mapping.evidence import (
     amount_agreement,
     containment,
     date_lag_plausibility,
@@ -12,7 +11,8 @@ from recon.mapping.evidence import (
     parsed_amounts,
     reference_hits,
 )
-from recon.mapping.profile import profile_csv_bytes, shape_of
+from recon.ai.mapping.profile import profile_csv_bytes, shape_of
+from recon.files.normalize import MappingError
 
 
 def csv_bytes(*lines: str) -> bytes:

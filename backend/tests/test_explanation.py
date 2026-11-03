@@ -2,12 +2,12 @@ import json
 from datetime import date
 from typing import Any
 
-from recon.domain.money import Money
-from recon.explanation.case import ExplainInput, RecordView
-from recon.explanation.llm import LlmExplainer
-from recon.explanation.schema import ANSWER_SCHEMA, SYSTEM_PROMPT, LlmExplanation, user_message
-from recon.explanation.verify import render, verify
-from recon.llm.client import Completion, LlmRefusal
+from recon.ai.explanation.case import ExplainInput, RecordView
+from recon.ai.explanation.llm import LlmExplainer
+from recon.ai.explanation.schema import ANSWER_SCHEMA, SYSTEM_PROMPT, LlmExplanation, user_message
+from recon.ai.explanation.verify import render, verify
+from recon.ai.llm.client import Completion, LlmRefusal
+from recon.money import Money
 
 
 def partial_case() -> ExplainInput:

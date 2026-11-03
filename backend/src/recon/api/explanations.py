@@ -12,14 +12,14 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
+from recon.ai.explanation.case import ExplainInput, RecordView
+from recon.ai.explanation.schema import PROMPT_VERSION, user_message
+from recon.ai.explanation.service import ExplainerChoice
 from recon.api.records import source_records
 from recon.api.schemas import AskExplanationOut, ExplanationOut
 from recon.api.suggestions import NotApplicableError
-from recon.domain.money import Money
-from recon.explanation.case import ExplainInput, RecordView
-from recon.explanation.schema import PROMPT_VERSION, user_message
-from recon.explanation.service import ExplainerChoice
-from recon.persistence.case_actions import get_case_detail
+from recon.cases.actions import get_case_detail
+from recon.money import Money
 from recon.persistence.models import CaseExplanation
 from recon.persistence.repository import get_profile, latest_file_versions, role_sources_of
 from recon.profiles import reconciliation_type

@@ -19,7 +19,6 @@ A reference that points at another counterparty's invoice is not a match.
 from collections import defaultdict, deque
 from collections.abc import Callable, Sequence
 
-from recon.domain.money import Money
 from recon.engine.model import (
     EngineConfig,
     ExceptionKind,
@@ -27,7 +26,8 @@ from recon.engine.model import (
     ReconciliationException,
     ReconciliationResult,
 )
-from recon.ingestion.normalize import NormalizedRecord
+from recon.files.normalize import NormalizedRecord
+from recon.money import Money
 
 Classifier = Callable[
     [NormalizedRecord, Sequence[NormalizedRecord], EngineConfig], Match | ReconciliationException

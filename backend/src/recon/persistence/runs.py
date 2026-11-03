@@ -18,7 +18,6 @@ from sqlalchemy import func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, sessionmaker
 
-from recon.domain.money import Money
 from recon.engine.incremental import merge_incremental
 from recon.engine.model import (
     EngineConfig,
@@ -28,7 +27,8 @@ from recon.engine.model import (
     ReconciliationResult,
 )
 from recon.engine.registry import Engine, engine_for
-from recon.ingestion.diff import diff_fingerprints
+from recon.files.diff import diff_fingerprints
+from recon.money import Money
 from recon.persistence.models import (
     Profile,
     ResultException,

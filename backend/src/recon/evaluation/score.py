@@ -4,9 +4,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from recon.datagen.model import Dataset
-from recon.domain.money import Money
 from recon.engine.model import ReconciliationResult
-from recon.ingestion.normalize import NormalizedRecord, normalize_reference
+from recon.files.normalize import NormalizedRecord, normalize_reference
+from recon.money import Money
 
 
 @dataclass(frozen=True)

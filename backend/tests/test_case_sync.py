@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 from sqlalchemy import func, select
 
+from recon.cases.sync import sync_cases
 from recon.datagen.generate import apply_corrections
 from recon.datagen.model import AnomalyKind
 from recon.datagen.writer import write_dataset
 from recon.engine.model import ExceptionKind, ReconciliationResult
-from recon.persistence.cases import sync_cases
 from recon.persistence.models import CaseEvent, CaseRecord, ExceptionCase
 from recon.persistence.runs import find_current_run, load_result, run_reconciliation
 from recon.pipeline import reconcile_period

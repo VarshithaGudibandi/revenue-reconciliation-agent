@@ -17,13 +17,13 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from recon.domain.money import Money
-from recon.ingestion.diff import Fingerprint
-from recon.ingestion.normalize import (
+from recon.files.diff import Fingerprint
+from recon.files.normalize import (
     NormalizedRecord,
     RejectedRow,
     normalize_csv_bytes,
 )
+from recon.money import Money
 from recon.persistence.models import Profile, SourceFileVersion, SourceRecord
 from recon.persistence.models import RejectedRow as RejectedRowModel
 from recon.profiles import RECONCILIATION_SOURCES, ProfileConfig, role_sources

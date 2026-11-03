@@ -1,5 +1,5 @@
-from recon.mapping.combine import combine_file, merge_field, merge_value
-from recon.mapping.proposal import FileProposal, field_choice, value_choice
+from recon.ai.mapping.combine import combine_file, merge_field, merge_value
+from recon.ai.mapping.proposal import FileProposal, field_choice, value_choice
 
 
 def test_agreement_is_confident_if_either_side_is() -> None:

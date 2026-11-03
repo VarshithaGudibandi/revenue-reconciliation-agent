@@ -3,17 +3,18 @@ from typing import Any
 
 import pytest
 
-from recon.adjudication.case import AdjudicationCase, Candidate, Ruling
-from recon.adjudication.combine import combine_rulings
-from recon.adjudication.llm import LlmAdjudicator, to_ruling
-from recon.adjudication.rules import adjudicate_by_rules, numbers_in
-from recon.adjudication.schema import (
+from recon.ai.adjudication.case import AdjudicationCase, Candidate, Ruling
+from recon.ai.adjudication.combine import combine_rulings
+from recon.ai.adjudication.llm import LlmAdjudicator, to_ruling
+from recon.ai.adjudication.rules import adjudicate_by_rules, numbers_in
+from recon.ai.adjudication.schema import (
     NONE,
     SYSTEM_PROMPT,
     LlmRuling,
     answer_schema,
     user_message,
 )
+from recon.ai.llm.client import Completion, LlmRefusal
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.text import MEMO_KINDS
 from recon.evaluation.adjudication_eval import (
@@ -21,7 +22,6 @@ from recon.evaluation.adjudication_eval import (
     judge,
     run_evaluation,
 )
-from recon.llm.client import Completion, LlmRefusal
 
 
 def case(memo: str, *descriptions: str) -> AdjudicationCase:

@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from recon.domain.money import (
+from recon.money import (
     CURRENCY_EXPONENTS,
     AmountParseError,
     CurrencyMismatchError,

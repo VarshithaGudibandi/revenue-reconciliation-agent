@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from recon.llm.providers import Provider, find_key, model_for
+from recon.ai.llm.providers import Provider, find_key, model_for
 
 
 class Settings(BaseSettings):

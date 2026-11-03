@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from recon.domain.money import Money
+from recon.money import Money
 
 
 class ExceptionKind(StrEnum):

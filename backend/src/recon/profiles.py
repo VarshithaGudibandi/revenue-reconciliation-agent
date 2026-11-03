@@ -8,7 +8,7 @@ from typing import Final
 from pydantic import BaseModel, model_validator
 
 from recon.engine.model import EngineConfig
-from recon.ingestion.normalize import ColumnMapping
+from recon.files.normalize import ColumnMapping
 
 
 @dataclass(frozen=True)

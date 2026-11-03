@@ -20,8 +20,8 @@ from recon.datagen.styles import (
     swapped_day_month,
 )
 from recon.datagen.writer import write_dataset
-from recon.domain.money import parse_amount
-from recon.ingestion.normalize import ColumnMapping, normalize_csv, normalize_reference
+from recon.files.normalize import ColumnMapping, normalize_csv, normalize_reference
+from recon.money import parse_amount
 
 SEEDS = (0, 1, 2)
 

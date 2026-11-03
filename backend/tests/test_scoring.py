@@ -7,11 +7,11 @@ from recon.datagen.generate import Config, apply_corrections, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.model import AnomalyKind
 from recon.datagen.writer import write_dataset
-from recon.domain.money import Money
 from recon.engine.model import ExceptionKind, ReconciliationResult
 from recon.engine.reconcile import reconcile
 from recon.evaluation.score import records_from_dataset, score
-from recon.ingestion.normalize import normalize_csv
+from recon.files.normalize import normalize_csv
+from recon.money import Money
 
 SEEDS = range(30)
 

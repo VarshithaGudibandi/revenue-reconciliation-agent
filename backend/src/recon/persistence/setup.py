@@ -12,8 +12,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from recon.ingestion.normalize import ColumnMapping, normalize_csv
-from recon.mapping.proposal import MappingProposal
+from recon.ai.mapping.proposal import MappingProposal
+from recon.files.normalize import ColumnMapping, normalize_csv
 from recon.persistence.models import MappingProposalRow, Profile
 from recon.persistence.repository import create_profile, register_file
 from recon.profiles import ProfileConfig, reconciliation_type

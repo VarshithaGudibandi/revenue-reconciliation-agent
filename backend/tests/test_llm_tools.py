@@ -8,9 +8,9 @@ from typing import Any
 import httpx
 import pytest
 
-from recon.llm.client import CassetteMiss, LlmError
-from recon.llm.providers import AnthropicJson, GeminiJson, OpenAICompatibleJson
-from recon.llm.tools import (
+from recon.ai.llm.client import CassetteMiss, LlmError
+from recon.ai.llm.providers import AnthropicJson, GeminiJson, OpenAICompatibleJson
+from recon.ai.llm.tools import (
     Message,
     RecordingSteps,
     ReplaySteps,

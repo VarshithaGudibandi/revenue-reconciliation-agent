@@ -1,5 +1,5 @@
 """Ask a model to explain the cases the engine finds, and count how many explanations survive
-the checks in ``recon.explanation.verify``.
+the checks in ``recon.ai.explanation.verify``.
 
     python -m recon.evaluation.explanation_eval --seeds 2 --per-kind 3
 
@@ -12,13 +12,13 @@ the accepted ones are well written.
 import argparse
 from collections import Counter, defaultdict
 
+from recon.ai.explanation.case import ExplainInput, RecordView
+from recon.ai.explanation.llm import LlmExplainer
 from recon.datagen.generate import Config, generate_dataset
 from recon.engine.reconcile import reconcile
 from recon.evaluation.llm_cli import add_llm_arguments, cost_line, json_client
 from recon.evaluation.score import records_from_dataset
-from recon.explanation.case import ExplainInput, RecordView
-from recon.explanation.llm import LlmExplainer
-from recon.ingestion.normalize import NormalizedRecord
+from recon.files.normalize import NormalizedRecord
 
 MAX_RECORDS = 12
 

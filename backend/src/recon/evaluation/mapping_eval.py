@@ -16,19 +16,19 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from recon.ai.mapping.agent import AgentMapper
+from recon.ai.mapping.baseline import propose_file, propose_mapping
+from recon.ai.mapping.combine import combine
+from recon.ai.mapping.llm import LlmMapper
+from recon.ai.mapping.pairing import Mapper, each_file_alone
+from recon.ai.mapping.profile import FileProfile, profile_csv_bytes
+from recon.ai.mapping.proposal import MappingProposal
 from recon.datagen.generate import Config, first_days, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles, style_group
 from recon.datagen.writer import write_dataset
 from recon.evaluation.llm_cli import add_llm_arguments, cost_line, json_client, tool_client
 from recon.evaluation.mapping_score import FILE_OUTCOMES, classify, score_file
-from recon.ingestion.normalize import ColumnMapping
-from recon.mapping.agent import AgentMapper
-from recon.mapping.baseline import propose_file, propose_mapping
-from recon.mapping.combine import combine
-from recon.mapping.llm import LlmMapper
-from recon.mapping.pairing import Mapper, each_file_alone
-from recon.mapping.profile import FileProfile, profile_csv_bytes
-from recon.mapping.proposal import MappingProposal
+from recon.files.normalize import ColumnMapping
 
 GROUPS = ("development", "held_out", "stress")
 VARIANTS = ("full_month", "first_12_days")

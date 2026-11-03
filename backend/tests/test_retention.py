@@ -7,9 +7,9 @@ from pathlib import Path
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import sessionmaker
 
+from recon.ai.mapping.proposal import MappingProposal
 from recon.config import Settings
 from recon.jobs import queue
-from recon.mapping.proposal import MappingProposal
 from recon.persistence.models import IdempotencyRecord, Job, MappingProposalRow
 from recon.persistence.setup import create_proposal
 from recon.retention import purge

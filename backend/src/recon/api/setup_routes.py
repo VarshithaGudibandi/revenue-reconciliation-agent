@@ -7,6 +7,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 
+from recon.ai.mapping.baseline import propose_mapping
+from recon.ai.mapping.profile import DATE_FORMATS, FileProfile, profile_csv_bytes
+from recon.ai.mapping.proposal import FIELDS, FileProposal, MappingProposal
+from recon.ai.mapping.service import MapperChoice
 from recon.api.jobs import dispatch_reconcile
 from recon.api.queries import type_labels
 from recon.api.routes import (
@@ -32,11 +36,7 @@ from recon.api.schemas import (
     amount_of,
 )
 from recon.config import Settings
-from recon.ingestion.normalize import ColumnMapping, MappingError, normalize_csv
-from recon.mapping.baseline import propose_mapping
-from recon.mapping.profile import DATE_FORMATS, FileProfile, profile_csv_bytes
-from recon.mapping.proposal import FIELDS, FileProposal, MappingProposal
-from recon.mapping.service import MapperChoice
+from recon.files.normalize import ColumnMapping, MappingError, normalize_csv
 from recon.persistence.models import MappingProposalRow
 from recon.persistence.repository import check_period
 from recon.persistence.setup import (

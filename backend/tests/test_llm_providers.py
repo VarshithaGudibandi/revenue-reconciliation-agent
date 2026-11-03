@@ -7,10 +7,8 @@ from typing import Any
 import httpx
 import pytest
 
-from recon.evaluation.explanation_eval import explain_inputs
-from recon.evaluation.llm_cli import StopOnQuota
-from recon.llm.client import Completion, LlmError, LlmRefusal, QuotaExhausted
-from recon.llm.providers import (
+from recon.ai.llm.client import Completion, LlmError, LlmRefusal, QuotaExhausted
+from recon.ai.llm.providers import (
     AnthropicJson,
     GeminiJson,
     OpenAICompatibleJson,
@@ -18,6 +16,8 @@ from recon.llm.providers import (
     live_client,
     model_for,
 )
+from recon.evaluation.explanation_eval import explain_inputs
+from recon.evaluation.llm_cli import StopOnQuota
 
 SCHEMA = {"type": "object", "properties": {"a": {"type": "integer"}}, "required": ["a"]}
 

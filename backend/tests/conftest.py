@@ -14,11 +14,11 @@ from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
+from recon.ai.llm.providers import KEY_VARIABLES
 from recon.datagen.generate import Config, apply_corrections, generate_dataset
 from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.model import Dataset
 from recon.datagen.writer import write_dataset
-from recon.llm.providers import KEY_VARIABLES
 from recon.persistence.repository import create_profile, register_file
 from recon.persistence.runs import get_or_create_run
 from recon.profiles import ProfileConfig

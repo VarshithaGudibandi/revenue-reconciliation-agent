@@ -5,7 +5,7 @@ from hypothesis import strategies as st
 
 from recon.cases.assign import ACTIVE_STATUSES, CaseView, RecordRef, assign
 from recon.cases.signature import exception_signature
-from recon.domain.money import Money
+from recon.money import Money
 
 STATUSES = ["open", "fix_reported", "accepted", "resolved", "withdrawn"]
 RECORDS = [(role, f"{role[0]}{n}") for role in ("invoice", "payment") for n in range(6)]

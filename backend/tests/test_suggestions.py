@@ -12,15 +12,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from recon.adjudication.llm import LlmAdjudicator
-from recon.adjudication.schema import NONE
+from recon.ai.adjudication.llm import LlmAdjudicator
+from recon.ai.adjudication.schema import NONE
+from recon.ai.llm.client import Completion, RecordingJson
 from recon.api.suggestions import load_input
 from recon.config import Settings
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.model import AnomalyKind, Dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset
-from recon.llm.client import Completion, RecordingJson
 from recon.main import create_app
 from recon.persistence.models import CaseSuggestion
 from recon.persistence.repository import create_profile, register_file
@@ -309,8 +309,8 @@ def test_the_interface_can_ask_who_makes_the_suggestions(world: World, tmp_path:
 
 
 def test_the_model_is_not_asked_twice_for_the_same_input(world: World) -> None:
-    from recon.adjudication.case import AdjudicationCase, Ruling
-    from recon.adjudication.service import AdjudicatorChoice
+    from recon.ai.adjudication.case import AdjudicationCase, Ruling
+    from recon.ai.adjudication.service import AdjudicatorChoice
     from recon.api.suggestions import ask_adjudicator
 
     asked: list[str] = []

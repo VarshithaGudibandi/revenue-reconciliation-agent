@@ -17,12 +17,12 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
-from recon.adjudication.case import AdjudicationCase, Candidate, Ruling
-from recon.adjudication.rules import adjudicate_by_rules
-from recon.adjudication.service import AdjudicatorChoice
+from recon.ai.adjudication.case import AdjudicationCase, Candidate, Ruling
+from recon.ai.adjudication.rules import adjudicate_by_rules
+from recon.ai.adjudication.service import AdjudicatorChoice
 from recon.api.records import source_records
 from recon.api.schemas import SuggestionOut
-from recon.persistence.case_actions import get_case_detail
+from recon.cases.actions import get_case_detail
 from recon.persistence.models import CaseSuggestion
 from recon.persistence.repository import latest_file_versions, role_sources_of
 

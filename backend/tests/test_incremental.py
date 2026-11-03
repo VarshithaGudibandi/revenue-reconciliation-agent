@@ -12,12 +12,12 @@ from datetime import date
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from recon.domain.money import Money
 from recon.engine.incremental import merge_incremental
 from recon.engine.model import ReconciliationResult
 from recon.engine.reconcile import reconcile
-from recon.ingestion.diff import Fingerprint, diff_fingerprints
-from recon.ingestion.normalize import NormalizedRecord, normalize_reference
+from recon.files.diff import Fingerprint, diff_fingerprints
+from recon.files.normalize import NormalizedRecord, normalize_reference
+from recon.money import Money
 
 CUSTOMERS = ["A", "B", "C"]
 

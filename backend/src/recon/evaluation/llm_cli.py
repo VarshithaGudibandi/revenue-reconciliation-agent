@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from recon.llm.client import Completion, JsonModel, QuotaExhausted, RecordingJson, ReplayJson
-from recon.llm.providers import KEY_VARIABLES, PROVIDERS, find_key, live_client, model_for
-from recon.llm.tools import Message, RecordingSteps, ReplaySteps, Step, Tool, ToolModel
+from recon.ai.llm.client import Completion, JsonModel, QuotaExhausted, RecordingJson, ReplayJson
+from recon.ai.llm.providers import KEY_VARIABLES, PROVIDERS, find_key, live_client, model_for
+from recon.ai.llm.tools import Message, RecordingSteps, ReplaySteps, Step, Tool, ToolModel
 
 # List prices in US dollars per million input and output tokens, for an estimate. Check current
 # pricing before relying on it. A model on a provider's free tier costs nothing within its quota.

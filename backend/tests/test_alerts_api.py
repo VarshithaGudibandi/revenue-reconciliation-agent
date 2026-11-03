@@ -17,7 +17,7 @@ from recon.datagen.mappings import INVOICE_MAPPING, PAYMENT_MAPPING
 from recon.datagen.writer import write_dataset
 from recon.jobs.handlers import handlers_for
 from recon.jobs.kinds import SEND_ALERTS
-from recon.jobs.worker import Worker
+from recon.jobs.runner import Worker
 from recon.main import create_app
 from recon.persistence.models import AlertDelivery, Job
 from recon.persistence.repository import create_profile, register_file
