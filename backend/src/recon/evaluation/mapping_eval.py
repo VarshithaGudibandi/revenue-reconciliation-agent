@@ -20,9 +20,8 @@ from recon.ai.mapping.agent import AgentMapper
 from recon.ai.mapping.baseline import propose_file, propose_mapping
 from recon.ai.mapping.combine import combine
 from recon.ai.mapping.llm import LlmMapper
-from recon.ai.mapping.pairing import Mapper, each_file_alone
 from recon.ai.mapping.profile import FileProfile, profile_csv_bytes
-from recon.ai.mapping.proposal import MappingProposal
+from recon.ai.mapping.proposal import Mapper, MappingProposal, each_file_alone
 from recon.datagen.generate import Config, first_days, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles, style_group
 from recon.datagen.writer import write_dataset

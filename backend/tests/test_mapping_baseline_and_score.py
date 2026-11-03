@@ -4,9 +4,14 @@ from pathlib import Path
 import pytest
 
 from recon.ai.mapping.baseline import propose_file, propose_mapping
-from recon.ai.mapping.pairing import each_file_alone
 from recon.ai.mapping.profile import FileProfile, profile_csv_bytes
-from recon.ai.mapping.proposal import FileProposal, MappingProposal, field_choice, value_choice
+from recon.ai.mapping.proposal import (
+    FileProposal,
+    MappingProposal,
+    each_file_alone,
+    field_choice,
+    value_choice,
+)
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, STRESS_STYLES, ExportStyles
 from recon.datagen.writer import write_dataset

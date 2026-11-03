@@ -13,8 +13,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from recon.ai.explanation.case import ExplainInput, RecordView
+from recon.ai.explanation.llm import ExplainerChoice
 from recon.ai.explanation.schema import PROMPT_VERSION, user_message
-from recon.ai.explanation.service import ExplainerChoice
 from recon.api.records import source_records
 from recon.api.schemas import AskExplanationOut, ExplanationOut
 from recon.api.suggestions import NotApplicableError

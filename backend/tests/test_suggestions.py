@@ -12,8 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from recon.ai.adjudication.llm import LlmAdjudicator
-from recon.ai.adjudication.schema import NONE
+from recon.ai.adjudication.llm import NONE, LlmAdjudicator
 from recon.ai.llm.client import Completion, RecordingJson
 from recon.api.suggestions import load_input
 from recon.config import Settings

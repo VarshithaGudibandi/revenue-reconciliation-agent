@@ -29,8 +29,7 @@ from recon.ai.mapping.evidence import (
     parsed_amounts,
     reference_hits,
 )
-from recon.ai.mapping.llm import to_proposal
-from recon.ai.mapping.llm_schema import LlmFileMapping, answer_schema
+from recon.ai.mapping.llm import LlmFileMapping, answer_schema, to_proposal
 from recon.ai.mapping.profile import FileProfile, _is_label_column, mask_value
 from recon.ai.mapping.proposal import FileProposal, MappingProposal
 from recon.files.normalize import normalize_reference

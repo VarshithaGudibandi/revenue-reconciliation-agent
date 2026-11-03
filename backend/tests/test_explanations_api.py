@@ -12,8 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from recon.ai.explanation.llm import LlmExplainer
-from recon.ai.explanation.service import ExplainerChoice
+from recon.ai.explanation.llm import ExplainerChoice, LlmExplainer
 from recon.ai.llm.client import Completion
 from recon.config import Settings
 from recon.datagen.generate import Config, generate_dataset

@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Scope
 
 from recon.ai.adjudication.service import build_adjudicator
-from recon.ai.explanation.service import build_explainer
+from recon.ai.explanation.llm import build_explainer
 from recon.ai.mapping.service import build_mapper
 from recon.api.alerts import ChannelExistsError, UnknownChannelError
 from recon.api.alerts import router as alerts_router

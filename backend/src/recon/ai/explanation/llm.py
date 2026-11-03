@@ -1,18 +1,19 @@
-"""An explainer that asks a language model and keeps its text only if it checks out."""
+"""An explainer that asks a language model and keeps its text only if it checks out.
+
+This module holds the explainer and the choice of explainer from configuration. What the model
+is asked is in ``schema`` and the checks are in ``verify``.
+"""
 
 from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
 from recon.ai.explanation.case import ExplainInput
-from recon.ai.explanation.schema import (
-    ANSWER_SCHEMA,
-    SYSTEM_PROMPT,
-    LlmExplanation,
-    user_message,
-)
+from recon.ai.explanation.schema import ANSWER_SCHEMA, SYSTEM_PROMPT, LlmExplanation, user_message
 from recon.ai.explanation.verify import render, verify
 from recon.ai.llm.client import JsonModel, LlmError
+from recon.ai.mapping.service import json_client
+from recon.config import Settings
 
 
 @dataclass(frozen=True)
@@ -49,3 +50,24 @@ class LlmExplainer:
             self.rejected += 1
             return Explained(None, tuple(problems))
         return Explained(render(answer, inp))
+
+
+@dataclass(frozen=True)
+class ExplainerChoice:
+    """The model that writes explanations, if one is configured. Without one, only the rules'
+    explanation is shown."""
+
+    name: str
+    model: str | None
+    explainer: LlmExplainer | None
+
+    @property
+    def uses_model(self) -> bool:
+        return self.explainer is not None
+
+
+def build_explainer(settings: Settings) -> ExplainerChoice:
+    client = json_client(settings)
+    if client is None:
+        return ExplainerChoice("rules", None, None)
+    return ExplainerChoice("model, checked", settings.llm_model_name(), LlmExplainer(client))

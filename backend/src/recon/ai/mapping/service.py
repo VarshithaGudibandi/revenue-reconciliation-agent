@@ -8,9 +8,8 @@ from recon.ai.llm.providers import live_client
 from recon.ai.mapping.baseline import propose_mapping
 from recon.ai.mapping.combine import combine
 from recon.ai.mapping.llm import LlmMapper
-from recon.ai.mapping.pairing import Mapper, each_file_alone
 from recon.ai.mapping.profile import FileProfile
-from recon.ai.mapping.proposal import MappingProposal
+from recon.ai.mapping.proposal import Mapper, MappingProposal, each_file_alone
 from recon.config import Settings
 
 

@@ -1,11 +1,15 @@
 """What a mapper says about a pair of source files.
 
 A proposal never silently guesses: each field either has a confident column or says what
-the alternatives are, so the user can be asked.
+the alternatives are, so the user can be asked. ``Mapper`` is the shape every mapper of a
+pair of files has.
 """
+
+from collections.abc import Callable
 
 from pydantic import BaseModel, Field
 
+from recon.ai.mapping.profile import FileProfile
 from recon.files.normalize import ColumnMapping
 
 FIELDS = ("record_id", "counterparty", "date", "amount", "currency", "reference", "text")
@@ -95,3 +99,18 @@ class FileProposal(BaseModel, frozen=True):
 class MappingProposal(BaseModel, frozen=True):
     invoices: FileProposal
     payments: FileProposal
+
+
+Mapper = Callable[[FileProfile, FileProfile], MappingProposal]
+SingleFileMapper = Callable[[FileProfile, str], FileProposal]
+
+
+def each_file_alone(mapper: SingleFileMapper) -> Mapper:
+    """Use a one-file mapper as a mapper of two files, giving each no sight of the other."""
+
+    def paired(invoices: FileProfile, payments: FileProfile) -> MappingProposal:
+        return MappingProposal(
+            invoices=mapper(invoices, "invoices"), payments=mapper(payments, "payments")
+        )
+
+    return paired

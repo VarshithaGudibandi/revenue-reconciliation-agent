@@ -19,7 +19,7 @@ from fastapi import (
 from sqlalchemy.orm import Session, sessionmaker
 
 from recon.ai.adjudication.service import AdjudicatorChoice
-from recon.ai.explanation.service import ExplainerChoice
+from recon.ai.explanation.llm import ExplainerChoice
 from recon.api import queries
 from recon.api.explanations import ask_explainer
 from recon.api.idempotency import request_hash, run_once, validate_key

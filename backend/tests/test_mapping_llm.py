@@ -18,11 +18,11 @@ from recon.ai.llm.client import (
     request_key,
 )
 from recon.ai.llm.providers import AnthropicJson
-from recon.ai.mapping.llm import LlmMapper
-from recon.ai.mapping.llm_schema import (
+from recon.ai.mapping.llm import (
     NO_COLUMN,
     SYSTEM_PROMPT,
     LlmFileMapping,
+    LlmMapper,
     answer_schema,
     user_message,
 )

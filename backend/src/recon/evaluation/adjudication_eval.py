@@ -13,9 +13,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from recon.ai.adjudication.case import AdjudicationCase, Candidate, Ruling
-from recon.ai.adjudication.combine import combine_rulings
 from recon.ai.adjudication.llm import LlmAdjudicator
 from recon.ai.adjudication.rules import adjudicate_by_rules
+from recon.ai.adjudication.service import combine_rulings
 from recon.datagen.generate import Config, generate_dataset
 from recon.datagen.model import AnomalyKind, Dataset
 from recon.datagen.text import MEMO_KINDS
