@@ -9,6 +9,7 @@ A mapper built around the first group looks better on it than it should.
 
 import argparse
 import json
+import random
 import tempfile
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -18,9 +19,10 @@ from pathlib import Path
 from recon.datagen.generate import Config, first_days, generate_dataset
 from recon.datagen.styles import INVOICE_STYLES, PAYMENT_STYLES, ExportStyles, style_group
 from recon.datagen.writer import write_dataset
-from recon.evaluation.llm_cli import add_llm_arguments, cost_line, json_client
+from recon.evaluation.llm_cli import add_llm_arguments, cost_line, json_client, tool_client
 from recon.evaluation.mapping_score import FILE_OUTCOMES, classify, score_file
 from recon.ingestion.normalize import ColumnMapping
+from recon.mapping.agent import AgentMapper
 from recon.mapping.baseline import propose_file, propose_mapping
 from recon.mapping.combine import combine
 from recon.mapping.llm import LlmMapper
@@ -30,6 +32,10 @@ from recon.mapping.proposal import MappingProposal
 
 GROUPS = ("development", "held_out", "stress")
 VARIANTS = ("full_month", "first_12_days")
+# Fixed, so that a sample is chosen before any mapper is run and is the same for every mapper.
+SAMPLE_SEED = 2026
+
+Case = tuple[ExportStyles, str, int]
 
 
 @dataclass(frozen=True)
@@ -97,16 +103,36 @@ def run_case(
     )
 
 
-def run_evaluation(
-    mapper: Mapper, *, seeds: Sequence[int], size: int = 120, variants: Sequence[str] = VARIANTS
-) -> list[CaseResult]:
+def all_cases(seeds: Sequence[int], variants: Sequence[str] = VARIANTS) -> list[Case]:
     return [
-        run_case(mapper, ExportStyles(i, p), variant, seed, size)
+        (ExportStyles(i, p), variant, seed)
         for seed in seeds
         for variant in variants
         for i in INVOICE_STYLES
         for p in PAYMENT_STYLES
     ]
+
+
+def sample_cases(cases: Sequence[Case], per_group: int) -> list[Case]:
+    """Up to ``per_group`` cases from each group, drawn with a fixed seed, in their order."""
+    rng = random.Random(SAMPLE_SEED)  # noqa: S311 - a reproducible sample, not a secret
+    chosen: set[Case] = set()
+    for label in GROUPS:
+        group = [c for c in cases if style_group(c[0].invoices, c[0].payments) == label]
+        chosen.update(rng.sample(group, min(per_group, len(group))))
+    return [c for c in cases if c in chosen]
+
+
+def run_evaluation(
+    mapper: Mapper,
+    *,
+    seeds: Sequence[int],
+    size: int = 120,
+    variants: Sequence[str] = VARIANTS,
+    cases: Sequence[Case] | None = None,
+) -> list[CaseResult]:
+    chosen = all_cases(seeds, variants) if cases is None else cases
+    return [run_case(mapper, styles, variant, seed, size) for styles, variant, seed in chosen]
 
 
 def summarize(results: Sequence[CaseResult]) -> dict[str, dict[str, int]]:
@@ -176,13 +202,19 @@ def _hybrid(rules: Mapper, model: Mapper) -> Mapper:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m recon.evaluation.mapping_eval")
     parser.add_argument("--seeds", type=int, default=3)
+    parser.add_argument("--first-seed", type=int, default=0)
     parser.add_argument("--invoices", type=int, default=120)
     parser.add_argument(
         "--mapper",
-        choices=["baseline", "llm", "llm-unchecked", "hybrid"],
+        choices=["baseline", "llm", "llm-unchecked", "hybrid", "agent"],
         default="baseline",
         help="llm-unchecked skips the checks against the data; hybrid combines the "
-        "paired rules with the model",
+        "paired rules with the model; agent reads both files and measures them with tools",
+    )
+    parser.add_argument(
+        "--sample",
+        type=int,
+        help="score only this many cases per group, drawn the same way for every mapper",
     )
     parser.add_argument(
         "--mode",
@@ -194,7 +226,11 @@ def main() -> None:
     args = parser.parse_args()
 
     llm: LlmMapper | None = None
-    if args.mapper == "baseline":
+    agent: AgentMapper | None = None
+    if args.mapper == "agent":
+        agent = AgentMapper(tool_client(args))
+        mapper: Mapper = agent
+    elif args.mapper == "baseline":
         mapper = propose_mapping if args.mode == "paired" else each_file_alone(propose_file)
     else:
         llm = LlmMapper(json_client(args), validate=args.mapper != "llm-unchecked")
@@ -202,8 +238,20 @@ def main() -> None:
         if args.mapper == "hybrid":
             mapper = _hybrid(propose_mapping, mapper)
 
-    results = run_evaluation(mapper, seeds=range(args.seeds), size=args.invoices)
+    seeds = range(args.first_seed, args.first_seed + args.seeds)
+    cases = all_cases(seeds)
+    if args.sample:
+        cases = sample_cases(cases, args.sample)
+    results = run_evaluation(mapper, seeds=seeds, size=args.invoices, cases=cases)
     print(format_report(results))
+    if agent is not None:
+        print(
+            f"\nmappings: {agent.mappings} of {len(cases)}, turns: {agent.turns}, "
+            f"tool calls: {agent.tool_calls}, errors: {len(agent.errors)}"
+        )
+        for message in agent.errors[:5]:
+            print(f"  {message}")
+        print(cost_line(args.model, agent.input_tokens, agent.output_tokens))
     if llm is not None:
         print(f"\nmodel calls: {llm.calls}, errors: {len(llm.errors)}")
         for message in llm.errors[:5]:

@@ -100,7 +100,7 @@ def test_gemini_waits_as_long_as_a_rate_limit_asks_then_tries_again() -> None:
     completion = gemini(server, waits).complete("s", "u", SCHEMA)
 
     assert completion.text == '{"a": 1}'
-    assert waits == [7.0, 4.0]
+    assert waits == [7.0, 16.0]
 
 
 def test_gemini_gives_up_after_a_few_refusals_and_at_once_on_a_bad_request() -> None:
@@ -203,7 +203,7 @@ def test_a_key_is_found_in_the_provider_s_usual_variable(monkeypatch: pytest.Mon
 def test_each_provider_gets_its_client_and_default_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "k")
     assert isinstance(live_client("gemini"), GeminiJson)
-    assert live_client("gemini").model == "gemini-3.1-flash-lite"  # type: ignore[attr-defined]
+    assert live_client("gemini").model == "gemini-3.1-flash-lite"
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     assert isinstance(live_client("anthropic"), AnthropicJson)

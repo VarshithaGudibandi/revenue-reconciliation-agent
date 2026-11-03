@@ -6,16 +6,18 @@ server that copies it) through ``OpenAICompatibleJson``. Every client asks for a
 output: JSON constrained by the schema the caller gives, never free text to be parsed.
 """
 
+import json
 import os
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, Literal, get_args
 
 import anthropic
 import httpx
 
-from recon.llm.client import Completion, JsonModel, LlmError, LlmRefusal, QuotaExhausted
+from recon.llm.client import Completion, LlmError, LlmRefusal, QuotaExhausted
+from recon.llm.tools import Message, Step, Tool, ToolCall
 
 Provider = Literal["gemini", "anthropic", "openai"]
 PROVIDERS: tuple[str, ...] = get_args(Provider)
@@ -41,6 +43,10 @@ DEFAULT_MODELS: dict[str, str] = {
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta"
 OPENAI_URL = "https://api.openai.com/v1"
 # Statuses worth another try: rate limited, or the service briefly unavailable.
+# Ends of a Gemini answer that mean it was withheld, as against cut off or malformed.
+GEMINI_REFUSALS = frozenset(
+    {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"}
+)
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 ATTEMPTS = 4
 MAX_WAIT_SECONDS = 60.0
@@ -71,7 +77,7 @@ def live_client(
     base_url: str | None = None,
     effort: str = "low",
     fallbacks: bool = True,
-) -> JsonModel:
+) -> "GeminiJson | AnthropicJson | OpenAICompatibleJson":
     """A client for the provider, with its key looked up if none is given."""
     if provider not in PROVIDERS:
         raise ValueError(f"unknown provider {provider!r}; choose one of {', '.join(PROVIDERS)}")
@@ -134,7 +140,9 @@ def post_json(
                 f"{response.text[:300]}"
             )
         if response.status_code in RETRY_STATUSES and attempt < ATTEMPTS - 1:
-            sleep(wait or 2.0 ** (attempt + 1))
+            # An overloaded service ("high demand") needs longer than a rate limit does.
+            backoff = 2.0 ** (attempt + 1) * (1 if response.status_code == 429 else 4)
+            sleep(min(wait or backoff, MAX_WAIT_SECONDS))
             continue
         if response.status_code == 429:
             raise QuotaExhausted(f"still rate limited after {ATTEMPTS} tries")
@@ -167,15 +175,8 @@ class GeminiJson:
         self._http = http or httpx.Client(timeout=180.0)
         self._sleep = sleep
 
-    def complete(self, system: str, user: str, schema: dict[str, Any]) -> Completion:
-        body = {
-            "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "responseJsonSchema": schema,
-            },
-        }
+    def _generate(self, body: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """The parts of the answer, and the whole answer, after checking how it ended."""
         answer = post_json(
             self._http,
             self._url,
@@ -193,20 +194,91 @@ class GeminiJson:
         reason = candidate.get("finishReason")
         if reason == "MAX_TOKENS":
             raise LlmError("the answer was cut off at the token limit")
-        if reason not in (None, "STOP"):
+        if reason in GEMINI_REFUSALS:
             raise LlmRefusal(f"the model stopped without answering: {reason}")
-        parts = candidate.get("content", {}).get("parts", [])
+        if reason not in (None, "STOP"):
+            raise LlmError(f"the model stopped without answering: {reason}")
+        parts: list[dict[str, Any]] = candidate.get("content", {}).get("parts", [])
+        return parts, answer
+
+    def _usage(self, answer: dict[str, Any]) -> tuple[str, int, int]:
+        usage = answer.get("usageMetadata", {})
+        return (
+            answer.get("modelVersion", self.model),
+            usage.get("promptTokenCount", 0),
+            # Thinking is billed as output, so it is counted with the answer.
+            usage.get("candidatesTokenCount", 0) + usage.get("thoughtsTokenCount", 0),
+        )
+
+    def complete(self, system: str, user: str, schema: dict[str, Any]) -> Completion:
+        parts, answer = self._generate(
+            {
+                "systemInstruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": user}]}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "responseJsonSchema": schema,
+                },
+            }
+        )
         text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
         if not text:
             raise LlmError("the model returned no text")
-        usage = answer.get("usageMetadata", {})
-        return Completion(
-            text=text,
-            model=answer.get("modelVersion", self.model),
-            input_tokens=usage.get("promptTokenCount", 0),
-            # Thinking is billed as output, so it is counted with the answer.
-            output_tokens=usage.get("candidatesTokenCount", 0) + usage.get("thoughtsTokenCount", 0),
+        model, input_tokens, output_tokens = self._usage(answer)
+        return Completion(text, model, input_tokens, output_tokens)
+
+    def step(self, system: str, messages: Sequence[Message], tools: Sequence[Tool]) -> Step:
+        """The model's next turn. It must call a tool: free text is not an answer here."""
+        contents: list[dict[str, Any]] = []
+        for message in messages:
+            if isinstance(message, str):
+                contents.append({"role": "user", "parts": [{"text": message}]})
+            elif isinstance(message, Step):
+                contents.append({"role": "model", "parts": message.raw})
+            else:
+                contents.append(
+                    {"role": "user", "parts": [_gemini_result(r) for r in message.results]}
+                )
+        parts, answer = self._generate(
+            {
+                "systemInstruction": {"parts": [{"text": system}]},
+                "contents": contents,
+                "tools": [
+                    {
+                        "functionDeclarations": [
+                            {
+                                "name": t.name,
+                                "description": t.description,
+                                "parametersJsonSchema": t.parameters,
+                            }
+                            for t in tools
+                        ]
+                    }
+                ],
+                "toolConfig": {"functionCallingConfig": {"mode": "ANY"}},
+            }
         )
+        calls = tuple(
+            ToolCall(
+                name=p["functionCall"]["name"],
+                arguments=p["functionCall"].get("args") or {},
+                id=p["functionCall"].get("id", ""),
+            )
+            for p in parts
+            if "functionCall" in p
+        )
+        if not calls:
+            raise LlmError("the model answered without calling a tool")
+        model, input_tokens, output_tokens = self._usage(answer)
+        return Step(calls, parts, model, input_tokens, output_tokens)
+
+
+def _gemini_result(result: tuple[ToolCall, dict[str, Any]]) -> dict[str, Any]:
+    call, content = result
+    response: dict[str, Any] = {"name": call.name, "response": content}
+    if call.id:
+        response["id"] = call.id
+    return {"functionResponse": response}
 
 
 class OpenAICompatibleJson:
@@ -269,6 +341,77 @@ class OpenAICompatibleJson:
             output_tokens=usage.get("completion_tokens", 0),
         )
 
+    def step(self, system: str, messages: Sequence[Message], tools: Sequence[Tool]) -> Step:
+        chat: list[dict[str, Any]] = [{"role": "system", "content": system}]
+        for message in messages:
+            if isinstance(message, str):
+                chat.append({"role": "user", "content": message})
+            elif isinstance(message, Step):
+                chat.append(message.raw)
+            else:
+                chat.extend(
+                    {"role": "tool", "tool_call_id": call.id, "content": json.dumps(content)}
+                    for call, content in message.results
+                )
+        answer = post_json(
+            self._http,
+            self._url,
+            headers={"Authorization": f"Bearer {self._key}"},
+            body={
+                "model": self.model,
+                "messages": chat,
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.parameters,
+                        },
+                    }
+                    for t in tools
+                ],
+                "tool_choice": "required",
+            },
+            sleep=self._sleep,
+        )
+        choices = answer.get("choices") or []
+        if not choices:
+            raise LlmError("the model returned no answer")
+        choice = choices[0]
+        message_out = choice.get("message", {})
+        if message_out.get("refusal") or choice.get("finish_reason") == "content_filter":
+            raise LlmRefusal("the model declined the request")
+        if choice.get("finish_reason") == "length":
+            raise LlmError("the answer was cut off at the token limit")
+        raw_calls = message_out.get("tool_calls") or []
+        try:
+            calls = tuple(
+                ToolCall(
+                    name=c["function"]["name"],
+                    arguments=json.loads(c["function"].get("arguments") or "{}"),
+                    id=c.get("id", ""),
+                )
+                for c in raw_calls
+            )
+        except (KeyError, ValueError) as error:
+            raise LlmError(f"the model's tool call could not be read: {error}") from error
+        if not calls:
+            raise LlmError("the model answered without calling a tool")
+        raw = {
+            "role": "assistant",
+            "content": message_out.get("content"),
+            "tool_calls": raw_calls,
+        }
+        usage = answer.get("usage", {})
+        return Step(
+            calls,
+            raw,
+            answer.get("model", self.model),
+            usage.get("prompt_tokens", 0),
+            usage.get("completion_tokens", 0),
+        )
+
 
 class AnthropicJson:
     """Asks Claude for JSON that matches a schema.
@@ -328,4 +471,60 @@ class AnthropicJson:
             model=getattr(response, "model", self.model),
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
+        )
+
+    def step(self, system: str, messages: Sequence[Message], tools: Sequence[Tool]) -> Step:
+        """The model's next turn. Forced tool use is not available on the default model, so the
+        system prompt has to ask for a tool call, and a turn without one is an error."""
+        chat: list[dict[str, Any]] = []
+        for message in messages:
+            if isinstance(message, str):
+                chat.append({"role": "user", "content": message})
+            elif isinstance(message, Step):
+                chat.append({"role": "assistant", "content": message.raw})
+            else:
+                chat.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": call.id,
+                                "content": json.dumps(content),
+                            }
+                            for call, content in message.results
+                        ],
+                    }
+                )
+        try:
+            response = self._client.messages.create(
+                model=self.model,
+                max_tokens=self._max_tokens,
+                system=system,
+                messages=chat,
+                tools=[
+                    {"name": t.name, "description": t.description, "input_schema": t.parameters}
+                    for t in tools
+                ],
+                output_config={"effort": self._effort},
+            )
+        except anthropic.APIError as error:
+            raise LlmError(f"the API request failed: {error}") from error
+        if response.stop_reason == "refusal":
+            raise LlmRefusal("the model declined the request")
+        if response.stop_reason == "max_tokens":
+            raise LlmError("the answer was cut off at the token limit")
+        calls = tuple(
+            ToolCall(name=b.name, arguments=dict(b.input), id=b.id)
+            for b in response.content
+            if b.type == "tool_use"
+        )
+        if not calls:
+            raise LlmError("the model answered without calling a tool")
+        return Step(
+            calls,
+            [b.model_dump(exclude_none=True) for b in response.content],
+            getattr(response, "model", self.model),
+            response.usage.input_tokens,
+            response.usage.output_tokens,
         )
