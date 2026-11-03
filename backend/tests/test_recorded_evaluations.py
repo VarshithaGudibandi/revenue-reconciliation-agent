@@ -8,10 +8,13 @@ them and the replay fails: record again, and update the README with what comes o
 from pathlib import Path
 
 from recon.adjudication.llm import LlmAdjudicator
-from recon.evaluation.adjudication_eval import run_evaluation
+from recon.evaluation.adjudication_eval import run_evaluation as adjudication_run
 from recon.evaluation.explanation_eval import explain_inputs
+from recon.evaluation.mapping_eval import all_cases, run_evaluation, sample_cases, summarize
 from recon.explanation.llm import LlmExplainer
 from recon.llm.client import ReplayJson
+from recon.llm.tools import ReplaySteps
+from recon.mapping.agent import AgentMapper
 
 CASSETTES = Path(__file__).resolve().parents[1] / "cassettes"
 MODEL = "gemini-3.1-flash-lite"
@@ -20,7 +23,7 @@ MODEL = "gemini-3.1-flash-lite"
 def test_the_recorded_adjudications_give_the_readme_s_table() -> None:
     llm = LlmAdjudicator(ReplayJson(CASSETTES / f"adjudication-{MODEL}.jsonl"))
 
-    results = run_evaluation(llm.adjudicate, seeds=range(5), size=200)
+    results = adjudication_run(llm.adjudicate, seeds=range(5), size=200)
 
     assert {kind: dict(counts) for kind, counts in results.items()} == {
         "explicit": {"correct": 13},
@@ -40,3 +43,17 @@ def test_every_recorded_explanation_passes_the_checks() -> None:
     assert len(inputs) == 46
     assert all(accepted)
     assert explainer.errors == []
+
+
+def test_the_recorded_mapping_agent_gives_the_readme_s_table() -> None:
+    agent = AgentMapper(ReplaySteps(CASSETTES / f"mapping-agent-{MODEL}.jsonl"))
+    cases = sample_cases(all_cases(range(1, 2)), 15)
+
+    summary = summarize(run_evaluation(agent, seeds=range(1, 2), cases=cases))
+
+    exact = {group: counts["files_exact"] for group, counts in summary.items()}
+    wrong = sum(counts["files_wrong"] for counts in summary.values())
+    assert exact == {"development": 23, "held_out": 18, "stress": 19}
+    assert wrong == 3
+    # The one case the provider was too busy to answer was never recorded.
+    assert len(agent.errors) == 1

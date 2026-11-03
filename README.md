@@ -233,6 +233,20 @@ Files mapped exactly, 1 seed of 120 invoices, full month and first-12-days varia
 
 No file was confidently wrong in any row; everything not exact is a question for the user. The model alone is worse than the rules on the held-out styles: it leaves the payment reference of `stripe_like` and the free-text column of `xero_like` open, where the rules are unsure of the customer column of `xero_like` instead. Because they are unsure about different things, together they settle more than either, and the gain is largest on the stress styles, whose headers are in languages the rules' word lists do not cover or are just `Column A`. One seed is 360 files; the per-group figures for held out (48 files) are the least certain. The 29 calls that one seed needs used about 0.8 million input tokens.
 
+### Mapping with a model that measures both files
+
+`mapping/agent.py` gives the model both files at once and tools to measure them: values two columns share, payment values that name an invoice, amount columns that agree, whether payments fall after a date, which of two dates is earlier, and more masked examples. The code only measures; the model decides, and its answer is checked against the data like the single-file model's. The idea was to replace the rules' word lists and thresholds with the model's judgement. `--mapper agent --sample 15` scores it on 15 cases per group, drawn the same way for every mapper.
+
+Files mapped exactly, on a sample from data the prompt was not written against (`--first-seed 1 --sample 15`, `gemini-3.1-flash-lite`, recorded in `backend/cassettes/`):
+
+| | development | held out | stress | files confidently wrong |
+|---|---|---|---|---|
+| rules, both files together | 77% | 70% | 43% | 0 |
+| rules and the single-file model (`hybrid`) | 77% | 70% | 63% | 0 |
+| model with tools (`agent`) | 77% | 60% | 63% | 3 |
+
+The agent did not beat the rules with the single-file model, and it was confidently wrong where neither of the others was: twice it took a bank's value date for the booking date, and once it said an invoice file had no free-text column. It also read about 1.15 million input tokens for 45 cases against 0.2 million, because every turn sends the conversation again, and one case was lost to the provider being overloaded. A first version did worse on a first sample (73% / 63% / 53%); I fixed what that run showed (an instruction about value dates that I had left out, a date-comparison tool, settled formats) and measured the second version on fresh data, so the table above is not tuned to its own cases. This is one small model on the free tier; a stronger model may do better, and I have not measured one. ADR 0011 has the decision.
+
 ## Adjudicating ambiguous payments
 
 The engine never decides which of several look-alike invoices a payment belongs to; it reports an `ambiguous_payment` case. `adjudication/` reads what the payer wrote and may suggest one. A suggestion is advice for a person to act on at the source, never a match.
