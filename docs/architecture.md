@@ -19,14 +19,16 @@ The map above shows the parts and what flows between them. Teal is code that is 
                                   |                                      |
                   result_match / result_exception  --> cases (append-only events)
                                                           |
-                                         alerts, explanations, suggestions (advice only)
+                       alerts, explanations, suggestions (advice only), investigations (a person approves)
 ```
 
-**One database.** Postgres holds the files' records, runs, results, cases, the job queue, alert state and the log of what the bucket scan did (ADR 0003, 0007).
+**One database.** Postgres holds the files' records, runs, results, cases, the job queue, alert state, the log of what the bucket scan did, and the state of paused investigations (ADR 0003, 0007).
 
 **Files are never edited.** A file is stored as a version; new content is the next version. A run reads the latest version of each file, and when an earlier run with the same configuration exists, only the counterparties whose records changed are matched again (ADR 0004).
 
-**The engine decides; the model advises.** Matching and arithmetic are pure functions of the records. A language model proposes column mappings (checked against the data), suggests which invoice an ambiguous payment was meant for, and writes explanations whose records and figures a program verifies before they are shown. None of that changes a match or a case (ADR 0002).
+**The engine decides; the model advises.** Matching and arithmetic are pure functions of the records. A language model (Gemini by default, or any provider with a key) proposes column mappings that are checked against the data, suggests which invoice an ambiguous payment was meant for, writes explanations whose records and figures a program verifies, and investigates why a case arose. None of that changes a match. An investigation's finding changes a case only after a person approves it, through the same actions a person uses (ADR 0002, 0010, 0012).
+
+**An investigation waits for a person.** It is a LangGraph run: the model reads the month with read-only tools, a program checks its finding, and the run stops until someone approves or rejects. The run's state is kept in Postgres, in its own `langgraph` schema, so the decision can come hours later or after a restart.
 
 **Cases close on data.** An exception becomes a case that follows its records across runs. A person can report a fix, accept a difference with a reason, or add notes; only new data resolves a case (ADR 0005).
 

@@ -57,3 +57,21 @@ def test_the_recorded_mapping_agent_gives_the_readme_s_table() -> None:
     assert wrong == 3
     # The one case the provider was too busy to answer was never recorded.
     assert len(agent.errors) == 1
+
+
+def test_the_recorded_investigations_give_the_documented_table() -> None:
+    from recon.ai.investigation.agent import investigate
+    from recon.evaluation.investigation_eval import sample
+
+    model = ReplaySteps(CASSETTES / f"investigation-{MODEL}.jsonl")
+    done = cause = found = checked = 0
+    for ledger, item in sample(range(2), 200, 10):
+        result = investigate(model, ledger, item.case)
+        if result.finding is None:
+            continue  # not recorded: the free quota ran out before these cases
+        done += 1
+        checked += result.verified
+        cause += result.verified and result.finding["cause"] == item.cause
+        real = {ledger.real(str(a)) for a in result.finding["evidence"]}
+        found += item.counterparts <= {r[1] for r in real if r is not None}
+    assert (done, cause, found, checked) == (26, 25, 26, 26)

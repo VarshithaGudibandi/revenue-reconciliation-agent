@@ -1,15 +1,29 @@
 # Revenue Reconciliation Agent
 
-I'm building an agent that reconciles revenue data across financial systems, for example invoices against payments, or processor payouts against bank deposits. It finds the records that don't match and explains each difference: how large it is, where it probably comes from, and what to check next.
+Finance teams spend days at month end working out why the money doesn't tie: which invoices were never paid, which payments match nothing, and why a payment came in short. I built a system that does that work on the exports finance systems already produce. It matches invoices against payments (and bank deposits against processor payouts), turns every difference into a tracked case, and uses a language model where judgement is needed: reading unfamiliar files, reading what a payer wrote, explaining a case, and investigating why it happened. A person approves anything the model proposes, and a case closes only when new data reconciles it.
 
-Two principles shape the design:
+![How the parts fit together](docs/architecture-map.svg)
 
-- **The engine does the matching and the arithmetic.** An LLM never computes a sum or decides a match on its own. It proposes column mappings, reads reference documents, judges ambiguous candidates, and writes the explanations.
-- **The data decides when an issue is resolved.** Source files are never edited. When a corrected file arrives, the affected records are matched again, and an exception closes only when the new data reconciles.
+Teal is deterministic code, amber is the language model, grey is stored data. `docs/architecture.md` explains the picture.
+
+## Where the AI is, and what checks it
+
+The matching engine and all arithmetic are plain code. Deciding that money matches is never left to a model. The model does the work that needs reading and judgement, and every answer it gives is checked by a program before anyone sees it.
+
+| Stage | What the model does | What checks it | Measured (Gemini 3.1 Flash-Lite, generated data) |
+|---|---|---|---|
+| **Column mapping** | Reads an unfamiliar export (any language, or headers like `Column A`) and says which column is the invoice id, amount, date and so on | Every choice must fit the column's values. A date order the values leave open is always a question | With the rules: 92% / 83% / 70% of files read exactly (development / held-out / stress styles), against 89% / 77% / 47% for the rules alone. None confidently wrong |
+| **Ambiguous payments** | Reads the payer's memo and says which of several look-alike invoices it was meant for | It must quote the memo. A quote that isn't there downgrades the answer to a suggestion | 42 of 44 answerable cases settled, 0 wrong. Rules alone settle 27 |
+| **Explanations** | Writes a plain-language reading of a case | Every record it cites, figure it states and id it writes must be the engine's | 46 of 46 passed the checks, on simple cases |
+| **Investigation** (LangGraph) | Looks around the month with read-only tools and proposes why the case happened, the evidence, and an action | The evidence and figures must come from its tools. Then **a person approves or rejects** | Right cause in 25 of the first 26 cases, with the other records involved found in all 26 |
+
+A fifth experiment lost and is documented as such. A model with tools mapping both files at once did not beat the rules with a single-file model, and it was confidently wrong 3 times where they never were ([ADR 0011](docs/adr/0011-a-mapping-agent-with-tools-was-measured-and-is-not-the-default.md)).
+
+**What the numbers do and don't mean.** All of them come from generated data, and I wrote the generator, the export styles and the rules. They show how the system behaves on data with known answers, not on a real company's exports. Rules written knowing the generator's formulas find the investigation causes 99% of the time; the model's case is that it gets close without anyone writing those rules. It finds and cites the evidence, and its write-up is ready for a person to approve. Every model answer is recorded in `backend/cassettes/`, so each table can be replayed without a key, and tests fail if a replay stops giving these numbers. The details, including the baselines and what is not measured, are in [docs/ai.md](docs/ai.md).
 
 ## Try it
 
-You need Docker with Compose, and nothing else: no account, no key, no data of your own.
+You need Docker with Compose. No account, key or data of your own.
 
 ```bash
 git clone https://github.com/VarshithaGudibandi/revenue-reconciliation-agent
@@ -17,309 +31,69 @@ cd revenue-reconciliation-agent
 docker compose up --build
 ```
 
-Open <http://127.0.0.1:8000> when it says the backend is ready (the first build takes a few minutes). It starts Postgres, runs the migrations, loads generated sample data, serves the dashboard and the API, and starts a worker that runs the reconciliations. Everything in the sample data is generated; nothing is real.
+Open <http://127.0.0.1:8000> once the backend says it is ready (the first build takes a few minutes). It loads two generated sample reconciliations: *invoices and payments*, and *payouts and deposits*. Things to try:
 
-What there is to look at:
+- **Open a case** to see its records, a plain-language reading, and its history. Report a fix, add a note, or accept the difference with a reason. You can't mark a case resolved; only data does that.
+- **Close the loop.** Report fixes on a few invoice cases, then press "Load corrected export". Only the customers whose records changed are matched again, and the fixed cases close by themselves.
+- **Set up from files.** "New reconciliation" takes two CSV exports, shows how it read each column and why, and asks only what the data can't settle. Sample files are in `frontend/e2e/fixtures`.
+- **Alerts.** Add a Slack, Teams or email channel and send a test.
 
-- **Two sample reconciliations**, chosen in the header: *Demo: invoices and payments* (400 invoices, about one in ten of which does not reconcile) and *Demo: payouts and deposits*. The dashboard shows how much reconciled, what is at stake by kind of problem and currency, and the list of cases that need attention.
-- **A case.** Click one: its records, a plain-language reading of what is wrong and what to check, and its history. Report a fix, add a note, or accept the difference with a reason. You cannot mark a case resolved; only new data does that.
-- **The loop.** On the invoices demo, report a fix on a few cases, then press "Load corrected export" in the banner. A corrected payments file arrives, only the customers whose records changed are matched again, and the cases whose data now reconciles close by themselves. The ones that were not fixed stay open, and a reported fix that did not work is flagged.
-- **Setting up from files.** "New reconciliation" takes two CSV exports and shows how it reads their columns, field by field, with the evidence, asking you only what the data cannot settle. Sample files to try it with are in `frontend/e2e/fixtures` (invoices and payments), or generate your own with `python -m recon.datagen` and `python -m recon.datagen.batches` (see Synthetic data).
-- **Alerts.** The Alerts page adds a Slack, Teams or email channel, sends a test, and shows what was sent.
-
-This runs with rules only, which is the baseline every model-based step in this project is measured against. Nothing leaves your machine. Stop it with `docker compose down`, and add `-v` to delete the sample data too.
+Without a key this runs on rules only, and nothing leaves your machine. To turn on the model stages, put a free Gemini key from Google AI Studio in a `.env` file (`GEMINI_API_KEY=...`) and restart. "Explain with the model", "Ask the model" and "Investigate with the model" then appear in the case view. Stop everything with `docker compose down` (add `-v` to delete the data).
 
 ## Use your own data
 
-Nothing about your data is configured by editing code. You change which of these you connect, and each step works without the later ones.
+1. **Start empty:** run `RECON_DEMO=false docker compose up -d --build`, then choose what to reconcile, upload one export of each kind for a month, check the columns, and confirm. "Add a file" takes the next export, and only what changed is matched again.
+2. **Or drop exports in an S3-compatible bucket**, named `<profile>/<YYYY-MM>/<source>.csv`, and a worker picks them up. Set the `RECON_S3_*` values in `.env` and run `docker compose --profile s3 up -d --build`.
+3. **Add a model:** Gemini by default, or set `RECON_LLM_PROVIDER` to `anthropic`, or to `openai`, which also reaches any OpenAI-compatible server through `RECON_LLM_BASE_URL`. Use that provider's usual key variable. The model is sent masked column samples for mapping, and the memo and candidate invoices for a suggestion. For explanations and investigations it gets amounts, dates and memo text under aliases (`R1`, `I1`, `C1`), never real ids or customer ids. **On Google's free tier, what you send may be used to improve Google's products and read by reviewers**, so use it with sample data only.
+4. **Alerts:** add a channel on the Alerts page. Email needs `RECON_SMTP_*`.
 
-**1. Your exports, with no keys.** Start with no sample data:
+There is no live connection to an accounting system, a processor or a bank: what this reads is the CSV export they produce. The optional settings (keys, a bucket, a mail server, starting empty) are explained in `.env.example`; the rest are in `backend/src/recon/config.py`.
 
-```bash
-RECON_DEMO=false docker compose up -d --build
-```
+## How it works, briefly
 
-The screen then opens on "Set up a reconciliation". Choose what to reconcile (invoices and payments, or bank deposits and processor payouts), upload one export of each for a month, check how the columns were read, and confirm. After that, "Add a file" takes the next export of either file, and only what changed is matched again. Your files are stored on the machine running the stack (the `app-data` volume) and their records in its Postgres.
+- **Files are never edited.** Each upload is stored as a new version. A run reads the latest version of each file and matches again only the customers whose records changed ([ADR 0004](docs/adr/0004-immutable-file-versions-and-partition-level-recompute.md)).
+- **Cases close on evidence.** Each difference becomes a case that follows its records across runs, with an append-only history. A person can report a fix, accept a difference with a reason, or add a note; only new data resolves a case ([ADR 0005](docs/adr/0005-evidence-based-exception-resolution.md)).
+- **Money is integers.** Amounts are stored and compared in minor units, never floats ([ADR 0001](docs/adr/0001-money-as-integer-minor-units.md)).
+- **One database.** Postgres holds the records, runs, cases, a job queue (leases, retries, fencing), alert state, and paused investigations ([ADR 0003](docs/adr/0003-postgres-as-the-only-database.md), [0007](docs/adr/0007-a-job-queue-in-postgres.md)).
+- **Any model provider.** One small interface with three clients (Gemini, Anthropic, OpenAI-compatible), structured output and tool calling, and retries on rate limits. A used-up daily quota fails at once: in the app the rules stand, and an evaluation stops instead of scoring a cut-off run ([ADR 0010](docs/adr/0010-any-model-provider-gemini-by-default.md)).
 
-**2. Optionally, a bucket instead of uploads.** Drop exports in an S3-compatible bucket, named `<profile>/<YYYY-MM>/<source>.csv`, and the worker registers them (see Files from a bucket). Copy `.env.example` to `.env`, set the `RECON_S3_*` values for your bucket, and run `docker compose --profile s3 up -d --build`. The key needs read access only.
+How the queue, bucket ingestion, alerts, the deposits engine, the API and retention work is in [docs/operations.md](docs/operations.md).
 
-**3. Optionally, a language model.** Put `GEMINI_API_KEY` in `.env` (a free key from Google AI Studio), or choose another provider with `RECON_LLM_PROVIDER` (see Column mapping). The model then also proposes column mappings, can suggest which invoice an ambiguous payment was meant for ("Ask the model"), and can write a second, checked explanation of a case ("Explain with the model"). The screens say whether a model took part. What is sent: for mapping, the shape of each column and a few masked samples, never rows; for a suggestion, the payment's memo and each candidate invoice's number, description and age, not the customer or the amounts; for an explanation, the records' amounts, dates and memo text under labels (R1, R2), not the customer or the real ids, though a payer may have written names in a memo. Remove the key and everything goes back to rules. On Google's free tier, what is sent may be used to improve Google's products and may be read by human reviewers, so I use it with the sample data only; for real records, use a paid tier or a provider whose terms you have checked.
+## Where things are
 
-**4. Optionally, alerts.** Add a channel on the Alerts page. Email needs `RECON_SMTP_*` in `.env`.
-
-What you connect, and how:
-
-| | Connected by | Needs |
-|---|---|---|
-| Your invoices, payments, payouts and deposits | a CSV export, uploaded or dropped in a bucket | nothing, or a bucket and a read-only key |
-| A language model | `GEMINI_API_KEY` in `.env`, or `RECON_LLM_PROVIDER` and that provider's key | a Gemini, Anthropic or OpenAI-compatible key |
-| Alerts | a Slack or Teams webhook URL on the Alerts page, or `RECON_SMTP_*` | a webhook or a mail server |
-| The database | the bundled Postgres, or `RECON_DATABASE_URL` for your own | nothing, or a Postgres you run |
-
-There is no live connection to an accounting system, a payment processor or a bank. What this reads is the export they produce, as a CSV file; connecting one directly would be a reader that writes the same files into the same place, and I have not written any. Everything else in `.env.example` is optional and commented there.
+| | |
+|---|---|
+| `backend/src/recon/engine` | the matching engines, pure functions |
+| `backend/src/recon/ai` | everything that uses a model: `llm` (providers, tools, recordings), `mapping`, `adjudication`, `explanation`, `investigation` |
+| `backend/src/recon/cases` | a case's life: assignment, sync with each run, actions, the rule-written reading |
+| `backend/src/recon/files` | reading exports, versions, the bucket scan |
+| `backend/src/recon/jobs`, `alerts`, `persistence`, `api` | the queue and worker, alerts, the database layer, the HTTP API |
+| `backend/src/recon/datagen`, `evaluation` | generated data with known answers, and the evaluations scored against it |
+| `backend/cassettes` | every recorded model answer behind the published numbers |
+| `frontend/src` | the React dashboard |
+| `docs` | architecture, the model stages, operations, and 12 decision records |
 
 ## Development
 
-### Backend checks
-
 ```bash
 docker compose up -d postgres
-cd backend
+cd backend && uv sync
 export RECON_DATABASE_URL=postgresql+psycopg://recon:recon@localhost:5432/recon
-uv sync
 uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest
-```
 
-The tests create and drop a scratch database for each test that needs one, so the database user must be allowed to create databases.
-
-### Frontend
-
-```bash
-cd frontend
-npm ci
-npm run dev          # Vite on :5173, proxying /api to a backend on :8000
+cd ../frontend && npm ci
 npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-The browser tests in `frontend/e2e` run against a server in demo mode that serves the built frontend (`RECON_STATIC_DIR=frontend/dist`) and has just been seeded with `python -m recon.demo`:
-
-```bash
-E2E_BASE_URL=http://127.0.0.1:8000 npx playwright test
-```
-
-`e2e/empty-start.e2e.ts` covers the other way in, with no sample data: against a server started with `RECON_DEMO=false` and an empty database, run `E2E_EMPTY=1 E2E_BASE_URL=http://127.0.0.1:8000 npx playwright test e2e/empty-start.e2e.ts`; it skips itself otherwise, so CI does not run it.
-
-They change the data: one test loads the corrected export and another creates a reconciliation named "Spanish ERP and bank", so start from a freshly seeded server for each run. The sample files for the setup tests are in `frontend/e2e/fixtures`; they were written with `python -m recon.datagen --seed 5 --invoices 120 --first-days 12 --invoice-style spanish --payment-style bank_statement --no-corrections`. CI runs them against the compose stack.
-
-## How a run works
-
-A profile holds the column mappings for each source file and the matching thresholds. Registering a file stores its content as a new version, with a snapshot of its normalized records; rows that cannot be normalized are kept with the reason. A run reads the latest version of each file for a period.
-
-When an earlier run exists with the same configuration, the new run compares the records of the two versions and matches again only the customers whose records changed, reusing the earlier result for the rest. Matching every customer again gives the same result.
-
-## Running reconciliations in a queue
-
-A reconciliation of a large period can take longer than a request should. With `RECON_JOBS=queue` the upload and the setup confirmation queue a `reconcile_period` job and return `202` with the job; `GET /api/jobs/{id}` shows it queued, running, succeeded (with the run and the case changes) or failed (with the reason). The dashboard waits for the job and then shows what it would have shown from the request. The default, `RECON_JOBS=inline`, runs the work in the request and needs no worker.
-
-The queue is a table in Postgres (`job`, `recon/jobs/queue.py`) and the worker is `python -m recon.worker`:
-
-- A worker claims one due job with `FOR UPDATE SKIP LOCKED`, so two workers never take the same one, and the claim counts as an attempt.
-- The claim sets a lease (`RECON_JOB_LEASE_SECONDS`, 60) that a second thread of the worker extends while the job runs, so a job can take longer than the lease. If the worker dies, the lease runs out and the next worker to look puts the job back, or fails it if it has used its attempts (`RECON_JOB_MAX_ATTEMPTS`, 5).
-- Only the holder of the lease can finish a job. A worker that was cut off for longer than the lease finds out when it finishes, and its result is dropped; the job belongs to whoever took it over.
-- A failed attempt waits before the next one: 5 seconds doubling to 5 minutes, with up to a fifth added at random. An error the handler marks permanent, such as a payload that cannot be read, fails at once.
-- Two requests to reconcile the same period while the first is still waiting are one job. A request made while a job runs queues another, because the running one may already have read its input, and the second does not start until the first has finished. The reconciliation itself is safe to run twice at the same time, so this ordering is for tidiness, not correctness.
-- The database refuses a job that makes no sense, for example one that is running with no lease or succeeded with no result.
-
-What is not covered: a handler cannot be cancelled, so a worker that lost its job still runs it to the end. Times come from the workers' clocks, so the lease has to be much longer than their clock error. There is one queue and no priorities. The wait for a result in the dashboard is a poll once a second.
-
-## Files from a bucket
-
-A worker can watch an S3-compatible bucket and register the files that arrive, so an export can be dropped in a bucket instead of uploaded through the screen. It is on when `RECON_S3_BUCKET` is set (with `RECON_S3_ENDPOINT_URL` for anything other than AWS, `RECON_S3_ACCESS_KEY`, `RECON_S3_SECRET_KEY`, `RECON_S3_PREFIX` and `RECON_S3_POLL_SECONDS`, 30).
-
-A key says where the file belongs:
-
-```text
-<prefix><profile>/<YYYY-MM>/<source>[-anything].csv      spanish-erp-and-bank/2026-01/payments-2026-01-31.csv
-```
-
-`<profile>` is the profile's name in lower case with each run of other characters turned into one hyphen, and `<source>` is `invoices` or `payments`. Anything after the source name and before `.csv` is free, so a re-export under a new name works.
-
-The worker queues a `scan_bucket` job every poll interval (several workers may do so; waiting duplicates count as one). A scan lists the bucket and, for each object it has not dealt with, finds the profile, downloads the object and registers it as a file version, exactly as an upload does. When that completes a period it queues the reconciliation. What was done with each object is kept in `ingested_object`, keyed by key and ETag:
-
-- an object is read once per ETag, so a second scan reads nothing it already has, and an overwritten object is new;
-- the same bytes under a new ETag (a re-upload) are noted as unchanged and change nothing;
-- a file that cannot be read with the profile's mapping is recorded as failed with the reason and is not tried again until the object changes;
-- an object that cannot be placed (the name does not fit, no such profile, no such source, two profiles with the same slug, too large) is recorded as skipped with the reason, and is looked at again on every scan, so a file dropped before its profile exists is picked up when the profile is created;
-- if the store fails in the middle of a scan the job fails and is retried; what was already registered stays.
-
-`uv run pytest tests/test_ingest.py` (in `backend`) runs the naming, the scan against an in-memory store, a worker running scans on a timer, and the S3 client over HTTP against an in-process S3 server (moto), including a listing of more than one page. `docker compose --profile s3 up --build` adds SeaweedFS, a bucket named `recon`, and a worker that ingests from it (the keys in `docker-compose.yml` are for that local stack only). MinIO's community images are no longer published, which is why the compose file uses SeaweedFS. A CI job drops the demo files in that bucket and waits for the period to reconcile.
-
-Not covered: an object is read whole into memory, so the size limit (`RECON_MAX_UPLOAD_MB`) matters; there is no notification from the bucket, only polling; and an object deleted from the bucket does not remove anything that was registered from it.
-
-## Alerts
-
-`Alerts` in the header sets up where messages go: a Slack or Teams webhook or an email address. A channel gets a message in two cases, each of which it can switch off: after a run that opens or reopens exceptions (how many, what is open now and the amount at stake by currency, with a link to the period), and once a day as a digest of everything open, at an hour of its choosing in UTC. A worker that was down at that hour sends the digest when it is back, and no digest is sent when nothing is open. "Send a test" sends a message now and shows how it went; the page lists the latest messages with their result and, for a failure, the reason.
-
-After a reconciliation job succeeds the worker queues a `send_alerts` job for that run, and a timer queues `send_digest` every ten minutes. Both are jobs on the queue described above, so a failed send is retried with backoff. What stops a retry from sending twice is `alert_delivery`, which has one row per channel and event (`run:<run id>`, `digest:<date>`): a delivery is claimed before it is sent and marked afterwards. This makes delivery at-least-once, not exactly-once: a worker that dies between the send and the mark causes a second message when the claim expires after two minutes. Reconciling the same files again is the same run and sends nothing new. An error that cannot pass (a revoked webhook, a refused address) is recorded and not retried; a timeout, a refused connection, a 429 or a 5xx is.
-
-A webhook URL is typed in by whoever sets up the channel and the server posts to it, so it is checked. It must be https and must not resolve to a loopback, private, link-local or otherwise internal address, which stops a channel from being used to reach services on the server's own network. Redirects are not followed. The check is made again when sending. It resolves the name here and the HTTP client resolves it again, so a hostile DNS server could answer differently the second time; I have not closed that. `RECON_ALERTS_ALLOW_HTTP` and `RECON_ALERTS_ALLOW_PRIVATE` relax the checks for a local setup, and the tests use them.
-
-Email goes through the SMTP server named by `RECON_SMTP_HOST` (`RECON_SMTP_PORT`, `RECON_SMTP_USER`, `RECON_SMTP_PASSWORD`, `RECON_SMTP_STARTTLS`, `RECON_SMTP_FROM`); without one an email channel cannot be created. `RECON_PUBLIC_URL` is the address put in the links.
-
-The Slack message is `{"text": …}` for an incoming webhook. The Teams message is an Adaptive Card in a `message`, which is the format a Teams Workflows webhook takes after Microsoft's retirement of the old connectors; I wrote it from Microsoft's description and community examples and have not sent it to a Teams tenant, so it is untested against the real service. Slack is likewise tested against a local server that records what it receives, not against Slack. Email is tested against a real SMTP server run in the tests.
-
-Not covered: webhook URLs are stored as typed in the database, not encrypted, and shown masked; there is no one-click unsubscribe, rate limit or quiet hours; the digest is UTC only; and the page has no way to edit a channel's target, only to delete and add it again.
-
-## Bank deposits against processor payouts
-
-A second type of reconciliation matches the deposits on a bank statement against the payouts a payment processor says it sent. It differs from invoices and payments in one way: a deposit usually carries several payouts, so the relation is many payouts to one deposit. In the engine's terms the deposit is the one record and its payouts are the several that settle it, which is the shape an invoice and its payments already have, so the stored match, the cases and the incremental runs are unchanged. The stored role names are still `invoice` (the deposit) and `payment` (a payout) for either type; a profile's type (`recon/profiles.py`) says what to call them, and the API and the screens use "deposit" and "payout".
-
-`recon/engine/deposits.py` is the engine. It is a pure function like the invoice engine, and every record ends in one match or one exception:
-
-1. A payout whose reference is a deposit's id, for the same account (the counterparty), belongs to that deposit. The deposit matches if its payouts add up to it; otherwise it is a `deposit_mismatch` with the difference (deposit minus payouts, so a fee taken shows as negative), or a `currency_mismatch`. This is the reference pass of the invoice engine, which both now share.
-2. For the deposits that are left, a search looks for sets of payouts with no reference, from the same account and currency and paid out up to ten days before the deposit, that add up to it. One set that no other deposit could also use is `proposed_grouping`: it is shown and never applied, because amounts adding up is not a reference. Several sets, or deposits that could share payouts, are `ambiguous_grouping`.
-3. A deposit nothing explains is `missing_payouts`, and a payout that is in no deposit is `undeposited_payout`.
-
-The search is bounded: at most 30 candidate payouts per deposit (the nearest in date), at most 8 payouts in a group, and a fixed number of steps, and a search that runs out of steps is reported as ambiguous rather than as nothing found. Refunds and zero payouts never join a group. The window is ten days and not the 45 days of the invoice engine because with a month of unreferenced payouts, unrelated payouts add up to the same total by chance: one seed of generated data came out ambiguous where the groups were distinct until I narrowed it. A payout that reaches the bank more than ten days after it was paid out is not found by amount: without a reference it is reported as `undeposited_payout` and its deposit as `missing_payouts`. A payout with a reference is not subject to the window.
-
-`python -m recon.datagen.batches --out DIR --seed 1 --deposits 100` writes `payouts.csv`, `deposits.csv` and `ground_truth.json`: most deposits are clean, and the rest carry a known problem of each of the six kinds (a fee taken, an unexplained deposit, a payout that names a deposit that is not in the file, payouts without a reference that add up to a deposit, two different ways to make a deposit, a deposit in another currency). `tests/test_deposits.py` runs the engine over twelve seeds and checks that every seeded problem is found with the right kind, records and difference, that every record is explained once, that the result does not depend on the order of the input, and that counterparties are independent, which is what lets an incremental run reuse them. `tests/test_deposit_runs.py` takes the same files through storage, cases and the API, and puts a reference on payouts that were only proposed to see the case resolve by the data in an incremental run that is checked against matching everything again.
-
-The demo has a second profile, "Demo: payouts and deposits", seeded by `python -m recon.demo`.
-
-The setup screen has a choice of what to reconcile. For deposits and payouts the first file is the deposits and the second the payouts, and only the rules propose the mapping (`POST /api/setup/proposals` takes a `type`, and its `invoices` and `payments` parts are the first and second file whatever the type). `tests/test_setup_deposits.py` runs that flow.
-
-Not covered: the language-model stages and the adjudication of ambiguous payments are for invoices and payments only; the mapping rules were checked on one layout of deposit and payout exports, not on styles I did not write; and a payout's reference is expected to hold one deposit id, so a bank memo that lists several payout ids is not read.
-
-## Cases
-
-Each exception becomes a case that is tracked across runs. A case follows a problem by the records it involves, so it keeps its notes and history while its amounts change. It closes by itself, as resolved, only when its records appear in a match in the data. I can report a fix, accept a variance with a reason and a note, reopen an accepted one, and add notes; I cannot mark a case resolved by hand. A reported fix is checked when new data arrives: if the problem is still there the case reopens with a flag. An accepted case comes back if the data behind it changes. Every transition is kept in an append-only log.
-
-## API and dashboard
-
-The API is under `/api`: profiles and periods, a per-period summary, the list of matches, the list of cases with filters, sorting and paging, one case with its records, history and notes, and the case actions (report fix, retract fix, accept, reopen, add note). Files are uploaded with a multipart request per source; when every source of a period is present the upload reconciles the period and updates the cases, inside the request or, with a job queue, as a job (see "Running reconciliations in a queue"). Case actions take the version of the case I was looking at and fail with a 409 `stale_case` if it has changed, and they accept an `Idempotency-Key` header so a retried request is applied once. Errors all have the shape `{"error": {"code", "message"}}`.
-
-Setting up a reconciliation starts from two sample files. `POST /api/setup/proposals` takes an invoice file, a payment file and a period, profiles both, and returns the proposed mapping: for each field the column, whether the proposal is confident, the other columns that were possible, and the reasons; the same for the date format and the decimal separator; and how many fields still need an answer. `POST /api/setup/proposals/{id}/preview` shows how the files would be read with a mapping, with the first rows and the rows that were rejected. `POST /api/setup/proposals/{id}/confirm` takes the name and the final mapping, creates the profile, registers the two files for the period and reconciles it. A mapping that reads no records from a file is refused and nothing is created. Confirming again with the same name and mapping returns the profile that exists; confirming with a different one is a 409.
-
-Who proposes the mapping is set by `RECON_MAPPER`. `auto` (the default) adds the language model to the rules when the provider's key is present or `RECON_LLM_REPLAY` names a file of recorded answers, and uses the rules alone otherwise, so the application runs without a key. `rules` never calls a model, and `hybrid` refuses to start without credentials or a replay file. `RECON_LLM_PROVIDER` chooses the provider: `gemini` (the default, `GEMINI_API_KEY` or `GOOGLE_API_KEY`), `anthropic` (`ANTHROPIC_API_KEY`) or `openai` (`OPENAI_API_KEY`), and `RECON_LLM_API_KEY` overrides whichever variable that provider reads. `openai` with `RECON_LLM_BASE_URL` reaches any server that speaks the OpenAI chat-completions protocol, such as a gateway or a local model server; it has no default model, so `RECON_LLM_MODEL` must name one. `RECON_LLM_MODEL` otherwise defaults to `gemini-3.1-flash-lite` or `claude-opus-5-5`. `RECON_LLM_EFFORT` and `RECON_LLM_FALLBACKS` apply to Anthropic only. All three providers are asked for a structured output that the schema constrains (`backend/src/recon/ai/llm/providers.py`), and a client waits and retries when it is rate limited. Every proposal says which model made it. The Gemini client has been called live; the Anthropic and OpenAI-compatible clients are tested only against stand-ins for their APIs.
-
-`frontend/openapi.json` is the committed OpenAPI description. A backend test fails when it no longer matches the app, and the frontend types in `frontend/src/api/schema.ts` are generated from it (`npm run api:types`); CI fails if they are out of date.
-
-The dashboard shows the share of invoices that reconciled, what is at stake by problem type and currency, and two tabs: cases that need attention, and invoices that reconciled. Every chart has a table view. "New reconciliation" (shown on its own when none exists yet) opens the setup: choose an invoice file, a payment file and a month, and the screen shows the proposed mapping field by field with the evidence for it. A field the data settles is marked "Confident" and anything else "Needs your answer"; the date order and an amount column the rules cannot tell apart stay open until the user picks one, and the create button stays disabled until nothing is open. Below the mapping, a table shows the first rows of each file as they will be read with the current choices, with the rows that were rejected, so a wrong choice shows up before anything is saved. A banner says whether the suggestions came from the rules alone or from the rules and a model. Opening a case shows the records involved, an explanation, the history and notes. The explanation is written by rules from the records (`backend/src/recon/cases/explain.py`) and says so. When a model is configured, "Explain with the model" adds a second, checked reading under it (see "Explaining a case with a model").
-
-## Column mapping
-
-A profile of a source file (`backend/src/recon/ai/mapping/profile.py`) holds facts about each column that are computed locally: how many values read as a date in each known format, how many read as an amount with a decimal point or comma, how many are currency codes, how unique the values are, and what shapes they take (`INV-000123` becomes `A+-9+`). `FileProfile.describe()` returns the profile without any cell value.
-
-The baseline mapper (`ai/mapping/baseline.py`) uses no language model. It decides from the data first and from header words last:
-
-- the amount column is the one whose values equal the other file's amounts, which separates a gross amount from a net amount, a tax amount or a fee;
-- the invoice id and the payment reference are found together, because payments cite invoice ids;
-- the customer columns are the pair that share their values across the two files;
-- among several date columns, the issue date is the one payments fall after, not before;
-- a column whose values are mostly several words is the optional free text (what an invoice is for, what a payer wrote), and such a column is never taken for a payment reference;
-- a date that fits both day-month and month-day is returned as a question, not as a guess.
-
-Every field is either confident or comes with the alternatives, so a user can be asked. `python -m recon.evaluation.mapping_eval` runs the mapper over every pair of export styles and reports, per field, whether it was correct, asked (the right answer was among the options), missed, or confidently wrong. The last is the one that matters. A second variant keeps only invoices from the first 12 days of the month, where the date order cannot be read from the values and asking is the right answer.
-
-Three groups of export styles are reported separately: development styles (the baseline was built around them), held-out styles (`xero_like`, `stripe_like`, written first and never tuned against) and stress styles (Italian, Dutch and French vocabularies the baseline's word lists do not cover, and `generic_columns`, whose headers are `Column A`, `Column B` and so on). `--mode single` maps each file on its own, as when the first of two files is uploaded, so there is no other file to cross-check against.
-
-Files by outcome, 3 seeds of 120 invoices, full month and first-12-days variants (`python -m recon.evaluation.mapping_eval --seeds 3 --mode paired|single`):
-
-| | development | held out | stress |
-|---|---|---|---|
-| both files together: exact / needs the user | 89% / 11% | 77% / 23% | 47% / 53% |
-| each file alone: exact / needs the user | 72% / 28% | 62% / 38% | 28% / 72% |
-
-The held-out figure for a file alone fell from 75% to 62% when the styles gained a free-text column: in `xero_like` a column of sentences is a second candidate for the customer, and its headers (`*ContactName`) are not in the baseline's word lists, which I did not extend because the style is held out. No file in any group was confidently wrong, and no field was missed (a field is missed when the right answer is not among the options offered). Everything not exact is a question for the user. I wrote the generator, the styles and the baseline, so these numbers show how the baseline behaves on my data, not on real exports; the stress column is the part that says where header words run out.
-
-### Mapping with a language model
-
-`ai/mapping/llm.py` asks the model to map one file at a time and then checks the answer against the data. The model receives the role of the file (invoices or payments) and a description of each column: its header, the shapes of its values, the date formats and decimal separators its values read under, how unique it is, and up to three examples. Short all-capital codes in a column with few distinct values (`EUR`, `OPEN`) are shown as they are. Every other example is masked: digits after the first of each run and letters after the first of each run longer than three become `*`, so `INV-000123` is sent as `INV-0*****` and `1500.00` as `1***.0*`. Cell values are not sent in any other form. A test checks that none of the first rows of a generated export appears in the description.
-
-The answer is a structured output in which every column field can only be one of the file's own headers or `(none)`. The engine then downgrades any answer the data contradicts: a column whose values do not fit the field, a column used for two fields, a decimal separator the amounts do not read with, and a date order that the values leave open. A date order is never confident unless the values settle it, whatever the model says. `--mapper llm-unchecked` shows what the model says without these checks, so the effect of the checks can be measured.
-
-`python -m recon.evaluation.mapping_eval --mapper llm` runs the same evaluation as the baseline, with the model mapping each file on its own. It needs a key for the chosen provider (`--provider`, `--model`). `--record FILE` saves each answer to a file, and `--replay FILE` serves those answers without the network or a key, so the evaluation can be repeated by someone who cannot call the API; it cannot answer a question that was not recorded. A run stops, rather than scoring the rest as unanswered, when the provider's quota for the day is used up; the answers recorded so far are kept and the next run carries on from them. The command prints the number of calls and the tokens.
-
-`--mapper hybrid` combines the rules (mapped with both files in sight) with the model: where they agree the answer is confident, a confident rule is not overruled by the model, a model that is sure where the rules are not is followed as a suggestion that is still a question, and two confident answers that disagree are a conflict left to the user.
-
-Files mapped exactly, 1 seed of 120 invoices, full month and first-12-days variants, with `gemini-3.1-flash-lite` on Google's free tier (recorded in `backend/cassettes/`, so `--replay` reproduces every model row without a key):
-
-| | development | held out | stress |
-|---|---|---|---|
-| rules, each file alone | 72% | 62% | 28% |
-| model, each file alone | 78% | 35% | 36% |
-| rules, both files together | 89% | 77% | 47% |
-| rules and model together (`hybrid`) | 92% | 83% | 70% |
-
-No file was confidently wrong in any row; everything not exact is a question for the user. The model alone is worse than the rules on the held-out styles: it leaves the payment reference of `stripe_like` and the free-text column of `xero_like` open, where the rules are unsure of the customer column of `xero_like` instead. Because they are unsure about different things, together they settle more than either, and the gain is largest on the stress styles, whose headers are in languages the rules' word lists do not cover or are just `Column A`. One seed is 360 files; the per-group figures for held out (48 files) are the least certain. The 29 calls that one seed needs used about 0.8 million input tokens.
-
-### Mapping with a model that measures both files
-
-`ai/mapping/agent.py` gives the model both files at once and tools to measure them: values two columns share, payment values that name an invoice, amount columns that agree, whether payments fall after a date, which of two dates is earlier, and more masked examples. The code only measures; the model decides, and its answer is checked against the data like the single-file model's. The idea was to replace the rules' word lists and thresholds with the model's judgement. `--mapper agent --sample 15` scores it on 15 cases per group, drawn the same way for every mapper.
-
-Files mapped exactly, on a sample from data the prompt was not written against (`--first-seed 1 --sample 15`, `gemini-3.1-flash-lite`, recorded in `backend/cassettes/`):
-
-| | development | held out | stress | files confidently wrong |
-|---|---|---|---|---|
-| rules, both files together | 77% | 70% | 43% | 0 |
-| rules and the single-file model (`hybrid`) | 77% | 70% | 63% | 0 |
-| model with tools (`agent`) | 77% | 60% | 63% | 3 |
-
-The agent did not beat the rules with the single-file model, and it was confidently wrong where neither of the others was: twice it took a bank's value date for the booking date, and once it said an invoice file had no free-text column. It also read about 1.15 million input tokens for 45 cases against 0.2 million, because every turn sends the conversation again, and one case was lost to the provider being overloaded. A first version did worse on a first sample (73% / 63% / 53%); I fixed what that run showed (an instruction about value dates that I had left out, a date-comparison tool, settled formats) and measured the second version on fresh data, so the table above is not tuned to its own cases. This is one small model on the free tier; a stronger model may do better, and I have not measured one. ADR 0011 has the decision.
-
-## Adjudicating ambiguous payments
-
-The engine never decides which of several look-alike invoices a payment belongs to; it reports an `ambiguous_payment` case. `ai/adjudication/` reads what the payer wrote and may suggest one. A suggestion is advice for a person to act on at the source, never a match.
-
-`adjudicate_by_rules` uses no model. It reads an invoice number in the memo (`inv 121`, `INV000121`, `invoice #121`, ignoring anything that reads as a year) or a word that only one invoice has, and it says nothing when the memo does not separate the candidates. It never decides from the order or the dates.
-
-`LlmAdjudicator` sends the memo as written and, for each candidate labelled A, B, C, its invoice number, what it is for and how many days before the payment it was issued. The customer, the amounts and the payment id are not sent. The model must answer with a label or `none`, a confidence, and a quote of the memo that its choice rests on. The engine relies on the choice only if the confidence is high and the quote is really in the memo; an invented quote makes the choice a suggestion. `combine_rulings` follows the same policy as the mapping stage: agreement is confident, a confident rule is not overruled, a model that is sure where the rules abstain is a suggestion, and two confident answers that disagree are left to a person.
-
-`python -m recon.evaluation.adjudication_eval --adjudicator rules|llm|llm-unchecked|hybrid` scores an adjudicator against the invoice the generator says was meant, by the kind of memo the payer wrote. On the generated data, 8 seeds of 200 invoices:
-
-| memo | cases | rules: correct | rules: abstained |
-|---|---|---|---|
-| explicit | 23 | 23 | 0 |
-| descriptive | 22 | 22 | 0 |
-| paraphrased | 26 | 0 | 26 |
-| useless | 25 | 0 | 25 |
-
-The rules are never confidently wrong. No adjudicator can do better than abstain on a useless memo, so 74% of these cases is the most that can be answered; the rules answer 47%, and the 27% that are paraphrased, with synonyms, other languages or typos, are what a model could add.
-
-With the model (`--adjudicator llm`, `gemini-3.1-flash-lite`, the default 5 seeds of 200 invoices, recorded in `backend/cassettes/`):
-
-| memo | cases | rules: correct | model: correct | model: suggested, right | model: wrong |
-|---|---|---|---|---|---|
-| explicit | 13 | 13 | 13 | 0 | 0 |
-| descriptive | 14 | 14 | 14 | 0 | 0 |
-| paraphrased | 17 | 0 | 15 | 2 | 0 |
-| useless | 16 | 0 | 0 | 0 | 0 |
-
-The model settles 42 of the 44 cases that can be answered and suggests the right invoice for the other two, without settling them because it was not sure. It abstained on all 16 useless memos and was never wrong. The rules settle 27 of the same 60.
-
-In the application, the free text of a record is an optional column in the mapping (shown as Description for invoices and Payment memo for payments), stored with each record and shown under it in the case view. Every ambiguous-payment case carries a suggestion: the rules' reading of the memo, computed when the case is opened. When a language model is configured, "Ask the model" (`POST /api/cases/{id}/suggestion`) asks it once for what the case holds now and keeps the answer for that exact input, so asking again costs nothing and a changed file is a new question. The case view says who read the memo, quotes the words the suggestion rests on, and marks a suggestion the rules could not settle as "A suggestion, not settled". `GET /api/capabilities` says whether a model is configured. Nothing about a case changes because of a suggestion; the next step stays correcting the reference at the source.
-
-## Explaining a case with a model
-
-Every case has a reading written by rules from its records (`cases/explain.py`). When a language model is configured, "Explain with the model" (`POST /api/cases/{id}/explanation`) asks it for a second one, shown under the first. A model's text is only shown if a program has checked it, which is the point of `ai/explanation/`.
-
-The model is told the kind of exception, the difference the engine calculated, and each record's amount, date and free text, with the records labelled `R1`, `R2`. It is not given the customer or the real ids, and it must refer to a record only as `[R1]`. Customer names and ids can still reach it if a payer wrote them in a memo. `verify` then rejects the text if it cites a label that is not in the case, states a number that is not one of the engine's figures (the amounts, their totals, the record counts, the parts of a date, or a number a record's own text contains), writes out an id that no record text contains, cites no record, or is longer than its limits. Accepted text has the labels replaced by the real ids. Anything rejected is not shown; the response lists what failed and the rule-written reading stands.
-
-A verified explanation is kept for the exact input it read (`case_explanation`), so asking again costs nothing and a changed file is a new question. A rejected attempt is kept as a record but not reused, so asking again asks again. What the check cannot do: it confirms that the figures and records are the engine's, not that the sentence built from them is wise. A sentence can use only true numbers and still point the reader at the wrong thing, so the text is labelled with who wrote it and what was checked, and says nothing was changed.
-
-`python -m recon.evaluation.explanation_eval` asks the model to explain up to three cases of each kind the engine finds in generated months and counts how many explanations the checks accept. With `gemini-3.1-flash-lite` (2 seeds, recorded in `backend/cassettes/`), all 46 were accepted: none cited a record outside the case, stated a figure the engine had not computed, or wrote a real id. I read a sample, and they are correct and plain. That says less than it seems: these cases have two or three records and generated memos, so there was little to get wrong. The tests also use a scripted model that invents a figure, to show the check rejects it.
-
-## Synthetic data
-
-The repository is public, so it only uses generated data. The generator writes an invoice export and a payment export with a known set of problems, a ground-truth file, and a second revision in which some of the problems are fixed at the source:
-
-```bash
-cd backend
-uv run python -m recon.datagen --out /tmp/recon-data --seed 42
-```
-
-Every generated invoice has a short description (`Hosting Jan 2026`) and every payment a memo, in the generator's data but not yet in the exported files. The memo of an ambiguous payment, one that could belong to two or three look-alike invoices, is one of four kinds that the ground truth records: `explicit` (it names the intended invoice, written the way people write it), `descriptive` (it says what it is for, in the words of the invoice), `paraphrased` (it says so in synonyms, another language or with a typo) or `useless`. Look-alike invoices always read differently. The text comes from its own random stream, so it changes none of the numbers, dates or ids; a test pins the hashes of the default exports.
-
-Real exports differ in header text, language, date format and number format, and they carry columns that look like the one you want. `--invoice-style` and `--payment-style` write the same data as one of several export styles, for example a German ERP export with `Bruttobetrag` and a decimal comma, a SAP-style export with `BELNR` and `BUDAT`, or a payment processor export with timestamps and a fee column next to the amount. Each run also writes `mapping_truth.json` with the correct column mapping, the lookalike columns that must not be mapped, and whether the date order can be told from the values at all. Two styles are held out, modelled on publicly described layouts of an accounting product and a payment processor (`xero_like`, `stripe_like`); I wrote them before the baseline mapper and don't tune against them. Their headers come from secondhand descriptions, not from an official export. A test writes every style, reads it back with its true mapping and checks that the records equal the generated ones.
-
-```bash
-uv run python -m recon.datagen --out /tmp/recon-data --invoice-style german --payment-style processor
-```
-
-## Retention
-
-The worker deletes what is finished with every six hours (`recon/retention.py`): succeeded and failed jobs after 14 days, mapping proposals that were never confirmed (with their sample files) after 7, idempotency records after 7, and alert deliveries after 90 (`RECON_RETENTION_JOBS_DAYS`, `RECON_RETENTION_PROPOSALS_DAYS`, `RECON_RETENTION_IDEMPOTENCY_DAYS`, `RECON_RETENTION_DELIVERIES_DAYS`). A request repeated with an idempotency key older than that is applied again. Reconciliation results, cases, file versions and the log of ingested objects are history and are not deleted.
-
-## Design
-
-`docs/architecture.md` is a one-page overview, and the decisions that cost something are in `docs/adr`. They include one for something I built, measured and removed (0006).
-
-## Future work
-
-- More of the live evaluation: three seeds of mapping instead of one (a free-tier day allows roughly one), a paid model to compare with Flash-Lite, and explanation cases with long, messy memos, where the checks have more to catch.
-- A setup path for the model stages on deposits and payouts, and a reader for a bank memo that lists several payout ids.
-- Per-field editing of an alert channel, and encryption of webhook URLs at rest.
-- Real exports, in place of generated ones, to see whether the baseline and the grouping window hold.
+The backend tests create a scratch database per test, so the database user needs permission to create databases. No test calls a real model: they use scripted models and the recordings. The browser tests (`frontend/e2e`, Playwright) run in CI against the full compose stack; see [docs/operations.md](docs/operations.md) for running them locally. The evaluations are under `python -m recon.evaluation.*`, each with `--replay` to rerun from the recordings.
+
+## Not done yet
+
+- **Real exports.** Every number here is on generated data.
+- **A stronger model.** Only Gemini 3.1 Flash-Lite on the free tier has been measured, because Flash's free tier allows 20 requests a day. The Anthropic and OpenAI-compatible clients are tested only against stand-ins for their APIs.
+- **Investigating more kinds of case,** and deposits and payouts with the model stages.
+- **Login and permissions.** It's a single-user tool meant to run on your own machine.
+- **Smaller gaps:** the Teams alert format was never sent to a real Teams tenant, webhook URLs are stored unencrypted, and the investigation panel is tested in component and API tests but hasn't been tried with a live model in a browser.
 
 ## License
 
